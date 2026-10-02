@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.TestAttempt
 import com.example.ui.theme.BorderLight
+import com.example.ui.theme.StatusError
 import com.example.ui.theme.StatusSuccess
 import com.example.ui.theme.SubjectBlue
 import com.example.ui.theme.TextMuted
@@ -67,6 +69,7 @@ data class ChartPoint(
 @Composable
 fun AccuracyOverTimeChart(
     attempts: List<TestAttempt>,
+    selectedSubjectTitle: String? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
@@ -75,9 +78,21 @@ fun AccuracyOverTimeChart(
     val dateFormat = remember { SimpleDateFormat("dd MMM", Locale.getDefault()) }
     val fullDateFormat = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
 
+    // Filter by subject if specified
+    val subjectFilteredAttempts = remember(attempts, selectedSubjectTitle) {
+        if (selectedSubjectTitle == null || selectedSubjectTitle.equals("All", ignoreCase = true) || selectedSubjectTitle.equals("All Subjects", ignoreCase = true)) {
+            attempts
+        } else {
+            attempts.filter {
+                it.subjectTitle.contains(selectedSubjectTitle, ignoreCase = true) ||
+                it.subjectId.contains(selectedSubjectTitle, ignoreCase = true)
+            }
+        }
+    }
+
     // Sort chronologically (oldest to newest for trend)
-    val chronologicalAttempts = remember(attempts, selectedFilter) {
-        val sorted = attempts.sortedBy { it.timestamp }
+    val chronologicalAttempts = remember(subjectFilteredAttempts, selectedFilter) {
+        val sorted = subjectFilteredAttempts.sortedBy { it.timestamp }
         when (selectedFilter) {
             "7D" -> sorted.takeLast(7)
             "30D" -> sorted.takeLast(15)
@@ -85,17 +100,18 @@ fun AccuracyOverTimeChart(
         }
     }
 
-    val chartPoints = remember(chronologicalAttempts) {
+    val chartPoints = remember(chronologicalAttempts, selectedSubjectTitle) {
         if (chronologicalAttempts.isEmpty()) {
+            val title = selectedSubjectTitle ?: "Object-Oriented Programming"
             listOf(
-                ChartPoint(0, 65, "Test 1", "01 Sep", "Programming", 20, 13),
-                ChartPoint(1, 70, "Test 2", "05 Sep", "Automata", 25, 17),
-                ChartPoint(2, 68, "Test 3", "10 Sep", "Architecture", 30, 20),
-                ChartPoint(3, 76, "Test 4", "15 Sep", "Database", 20, 15),
-                ChartPoint(4, 82, "Test 5", "20 Sep", "OOP", 30, 25),
-                ChartPoint(5, 78, "Test 6", "25 Sep", "CS Core", 25, 19),
-                ChartPoint(6, 88, "Test 7", "28 Sep", "Automata", 30, 26),
-                ChartPoint(7, 92, "Test 8", "02 Oct", "Programming", 40, 37)
+                ChartPoint(0, 62, "Test 1", "01 Sep", title, 20, 12),
+                ChartPoint(1, 68, "Test 2", "06 Sep", title, 25, 17),
+                ChartPoint(2, 72, "Test 3", "12 Sep", title, 30, 22),
+                ChartPoint(3, 75, "Test 4", "18 Sep", title, 20, 15),
+                ChartPoint(4, 80, "Test 5", "22 Sep", title, 30, 24),
+                ChartPoint(5, 84, "Test 6", "26 Sep", title, 25, 21),
+                ChartPoint(6, 88, "Test 7", "29 Sep", title, 30, 26),
+                ChartPoint(7, 92, "Test 8", "02 Oct", title, 40, 37)
             )
         } else {
             chronologicalAttempts.mapIndexed { idx, it ->
@@ -110,6 +126,12 @@ fun AccuracyOverTimeChart(
                 )
             }
         }
+    }
+
+    val improvementGain = remember(chartPoints) {
+        if (chartPoints.size >= 2) {
+            chartPoints.last().score - chartPoints.first().score
+        } else 14
     }
 
     // Default select latest point
@@ -151,7 +173,7 @@ fun AccuracyOverTimeChart(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Accuracy Over Time",
+                            text = if (selectedSubjectTitle != null && selectedSubjectTitle != "All Subjects") "$selectedSubjectTitle Progress" else "Accuracy & Improvement Over Time",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
@@ -160,15 +182,15 @@ fun AccuracyOverTimeChart(
                             Icon(
                                 imageVector = Icons.Default.TrendingUp,
                                 contentDescription = null,
-                                tint = StatusSuccess,
+                                tint = if (improvementGain >= 0) StatusSuccess else StatusError,
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "+14% accuracy gain",
+                                text = if (improvementGain >= 0) "+${improvementGain}% improvement over time" else "${improvementGain}% trajectory",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = StatusSuccess
+                                color = if (improvementGain >= 0) StatusSuccess else StatusError
                             )
                         }
                     }
@@ -313,6 +335,16 @@ fun AccuracyOverTimeChart(
                         )
                     }
 
+                    // Recharts Reference Target Line at 75% Benchmark
+                    val targetY = paddingTop + chartHeight - (0.75f * chartHeight)
+                    drawLine(
+                        color = Color(0xFFF59E0B),
+                        start = Offset(paddingLeft, targetY),
+                        end = Offset(width - paddingRight, targetY),
+                        strokeWidth = 1.5.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                    )
+
                     if (chartPoints.size < 2) return@Canvas
 
                     val stepX = chartWidth / (chartPoints.size - 1)
@@ -435,6 +467,39 @@ fun AccuracyOverTimeChart(
                         color = TextMuted,
                         fontWeight = FontWeight.Medium
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(thickness = 0.8.dp, color = BorderLight)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Recharts-Style Chart Legend
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(14.dp, 3.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(SubjectBlue)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Accuracy Trend", fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+                }
+                Spacer(modifier = Modifier.width(20.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(14.dp, 2.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(Color(0xFFF59E0B))
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Passing Target (75%)", fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                 }
             }
         }

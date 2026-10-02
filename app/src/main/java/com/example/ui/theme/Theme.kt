@@ -37,11 +37,10 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    // Academic MCQ app looks best with dedicated crisp light mode matching the design,
-    // while supporting dark mode gracefully
+    // Dedicated crisp professional academic white theme matching the requirements
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(

@@ -2,8 +2,11 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
+import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -46,7 +49,21 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Ensure pure white status bar background with dark status bar icons
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                AndroidColor.WHITE,
+                AndroidColor.WHITE
+            )
+        )
+        WindowCompat.getInsetsController(window, window.decorView)?.apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
 
         val database = AppDatabase.getDatabase(applicationContext, lifecycleScope)
         lifecycleScope.launch(Dispatchers.IO) {
@@ -61,6 +78,7 @@ class MainActivity : ComponentActivity() {
                 val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
                 val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
                 val selectedSubject by viewModel.selectedSubjectDetail.collectAsStateWithLifecycle()
+                val dailyStreak by viewModel.dailyStreak.collectAsStateWithLifecycle()
 
                 var showMenuSheet by remember { mutableStateOf(false) }
                 val sheetState = rememberModalBottomSheetState()
@@ -101,6 +119,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                             topBar = {
                                 AppHeader(
+                                    streakDays = dailyStreak.currentStreak,
                                     showSearch = currentTab == MainTab.SUBJECTS || currentTab == MainTab.TEST,
                                     onSearchClick = { viewModel.selectTab(MainTab.SUBJECTS) },
                                     onMenuClick = {

@@ -108,15 +108,15 @@ fun TestResultScreen(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundSlate)
-            .statusBarsPadding()
             .navigationBarsPadding()
             .testTag("test_result_screen")
     ) {
-        // FIXED TOP BAR (Stays pinned on top even when the screen is scrolled)
+        // FIXED TOP BAR with Pure White Status Bar Background
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.White)
+                .statusBarsPadding()
                 .border(1.dp, BorderLight)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically

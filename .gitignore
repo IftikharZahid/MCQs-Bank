@@ -1,18 +1,43 @@
-*.iml
-.gradle
-.kotlin
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
+# Built application files
 /build
-/captures
-.externalNativeBuild
-.cxx
+/*/build
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Gradle files
+.gradle/
+build/
+.kotlin/
+
+# IDE files
+*.iml
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Sensitive credentials & environment secrets (NEVER publish to GitHub)
 local.properties
+secrets.properties
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
 debug.keystore
+debug.keystore.base64
+
+# Private service account keys
+service-account*.json
+credentials.json

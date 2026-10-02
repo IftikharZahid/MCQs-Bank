@@ -152,15 +152,15 @@ fun SubjectDetailModal(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundSlate)
-            .statusBarsPadding()
             .navigationBarsPadding()
             .testTag("subject_detail_screen")
     ) {
-        // Top App Bar
+        // Top App Bar with Pure White Status Bar Background
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.White)
+                .statusBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

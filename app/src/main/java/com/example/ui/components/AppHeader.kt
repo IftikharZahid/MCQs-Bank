@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
@@ -42,6 +43,7 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun AppHeader(
     modifier: Modifier = Modifier,
+    streakDays: Int = 5,
     showSearch: Boolean = false,
     onSearchClick: () -> Unit = {},
     onMenuClick: () -> Unit = {}
@@ -113,8 +115,34 @@ fun AppHeader(
             // Compact Action Buttons
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Streak Badge Pill
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFFFF7ED))
+                        .border(1.dp, Color(0xFFFED7AA), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 7.dp, vertical = 4.dp)
+                        .testTag("header_streak_pill")
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocalFireDepartment,
+                            contentDescription = "Streak flame",
+                            tint = Color(0xFFEA580C),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "$streakDays",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFEA580C)
+                        )
+                    }
+                }
+
                 if (showSearch) {
                     IconButton(
                         onClick = onSearchClick,

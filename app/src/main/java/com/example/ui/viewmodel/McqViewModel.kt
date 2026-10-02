@@ -3,6 +3,9 @@ package com.example.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.DailyStreakInfo
+import com.example.data.model.DayStreakItem
+import com.example.data.model.DayStreakStatus
 import com.example.data.model.PerformanceStats
 import com.example.data.model.Question
 import com.example.data.model.Subject
@@ -111,6 +114,27 @@ class McqViewModel(private val repository: McqRepository) : ViewModel() {
         )
     )
     val performanceStats: StateFlow<PerformanceStats> = _performanceStats.asStateFlow()
+
+    // Daily Learning Streak State
+    private val _dailyStreak = MutableStateFlow(
+        DailyStreakInfo(
+            currentStreak = 5,
+            bestStreak = 14,
+            todaySolved = 15,
+            dailyGoalTarget = 15,
+            streakFreezeCount = 1,
+            days = listOf(
+                DayStreakItem("Mon", "28", DayStreakStatus.COMPLETED, 20),
+                DayStreakItem("Tue", "29", DayStreakStatus.COMPLETED, 25),
+                DayStreakItem("Wed", "30", DayStreakStatus.COMPLETED, 18),
+                DayStreakItem("Thu", "01", DayStreakStatus.COMPLETED, 30),
+                DayStreakItem("Fri", "02", DayStreakStatus.TODAY_COMPLETED, 15),
+                DayStreakItem("Sat", "03", DayStreakStatus.FUTURE, 0),
+                DayStreakItem("Sun", "04", DayStreakStatus.FUTURE, 0)
+            )
+        )
+    )
+    val dailyStreak: StateFlow<DailyStreakInfo> = _dailyStreak.asStateFlow()
 
     // Test Config State
     private val _testConfig = MutableStateFlow(TestConfig())
@@ -363,8 +387,39 @@ class McqViewModel(private val repository: McqRepository) : ViewModel() {
                 scorePercentage = scorePercent,
                 durationSeconds = duration
             )
+            incrementDailyStreak(correct + wrong)
             refreshStats()
         }
+    }
+
+    fun incrementDailyStreak(solved: Int) {
+        _dailyStreak.update { current ->
+            val newTodaySolved = current.todaySolved + solved
+            val isNowCompleted = newTodaySolved >= current.dailyGoalTarget
+            val updatedDays = current.days.map { day ->
+                if (day.status == DayStreakStatus.TODAY_PENDING || day.status == DayStreakStatus.TODAY_COMPLETED) {
+                    day.copy(
+                        status = if (isNowCompleted) DayStreakStatus.TODAY_COMPLETED else DayStreakStatus.TODAY_PENDING,
+                        solvedCount = newTodaySolved
+                    )
+                } else day
+            }
+            val newStreak = if (isNowCompleted && current.todaySolved < current.dailyGoalTarget) {
+                current.currentStreak + 1
+            } else {
+                current.currentStreak
+            }
+            current.copy(
+                todaySolved = newTodaySolved,
+                currentStreak = newStreak,
+                bestStreak = maxOf(current.bestStreak, newStreak),
+                days = updatedDays
+            )
+        }
+    }
+
+    fun startDailySprintTest() {
+        startConfiguredTest()
     }
 
     fun exitTest() {

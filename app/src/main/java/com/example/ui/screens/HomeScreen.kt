@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +42,6 @@ import com.example.data.model.Subject
 import com.example.ui.components.HeroCard
 import com.example.ui.components.StatsGrid
 import com.example.ui.components.SubjectCard
-import com.example.ui.theme.AccentYellowDark
 import com.example.ui.theme.BackgroundSlate
 import com.example.ui.theme.BorderLight
 import com.example.ui.theme.BrandNavyDark
@@ -57,7 +57,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val allSubjects by viewModel.allSubjects.collectAsStateWithLifecycle()
-    val topSubjects = allSubjects.take(4)
+    val topSubjects = remember(allSubjects) { allSubjects.take(4) }
 
     LazyColumn(
         modifier = modifier
@@ -65,7 +65,7 @@ fun HomeScreen(
             .background(BackgroundSlate)
             .testTag("home_screen_list"),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 1. Dark Navy Hero Banner (Compact Summary Banner)
         item {
@@ -75,7 +75,10 @@ fun HomeScreen(
             )
         }
 
-        // 2. 4-Metrics Quick Stats Bar (Compact Summary Strip)
+        // 2. Today Tests Counter Card
+        // [REMOVED]
+
+        // 3. 4-Metrics Quick Stats Bar (Compact Summary Strip)
         item {
             StatsGrid()
         }
@@ -157,19 +160,12 @@ fun HomeScreen(
             }
         }
 
-        // 4. List of Top 4 Subjects (Compact book cards with 4dp spacing)
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                topSubjects.forEach { subject ->
-                    SubjectCard(
-                        subject = subject,
-                        onClick = { viewModel.showSubjectDetail(subject) }
-                    )
-                }
-            }
+        // 4. List of Top 4 Subjects (Virtualized with stable key)
+        items(topSubjects, key = { it.id }) { subject ->
+            SubjectCard(
+                subject = subject,
+                onClick = { viewModel.showSubjectDetail(subject) }
+            )
         }
 
         // 5. Outlined Action: View All Subjects
