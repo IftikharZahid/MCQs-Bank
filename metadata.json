@@ -1,0 +1,8 @@
+{
+  "name": "MCQs Question Bank",
+  "description": "Academic MCQs Question Bank for university and college level exam preparation with subject-wise modules, practice examinations, and performance tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
