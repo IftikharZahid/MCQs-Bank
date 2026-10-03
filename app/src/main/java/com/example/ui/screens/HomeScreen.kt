@@ -21,7 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.Subject
+import com.example.data.repository.SyncStatus
 import com.example.ui.components.HeroCard
 import com.example.ui.components.StatsGrid
 import com.example.ui.components.SubjectCard
@@ -58,6 +62,8 @@ fun HomeScreen(
 ) {
     val allSubjects by viewModel.allSubjects.collectAsStateWithLifecycle()
     val topSubjects = remember(allSubjects) { allSubjects.take(4) }
+    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = modifier
@@ -81,6 +87,88 @@ fun HomeScreen(
         // 3. 4-Metrics Quick Stats Bar (Compact Summary Strip)
         item {
             StatsGrid()
+        }
+
+        // 4. Live MongoDB Synchronization Strip
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        when (syncStatus) {
+                            is SyncStatus.Syncing -> Color(0xFFEFF6FF)
+                            is SyncStatus.Success -> Color(0xFFECFDF5)
+                            is SyncStatus.Error -> Color(0xFFFFFBEB)
+                            else -> Color.White
+                        }
+                    )
+                    .border(
+                        1.dp,
+                        when (syncStatus) {
+                            is SyncStatus.Syncing -> Color(0xFFBFDBFE)
+                            is SyncStatus.Success -> Color(0xFFA7F3D0)
+                            is SyncStatus.Error -> Color(0xFFFDE68A)
+                            else -> BorderLight
+                        },
+                        RoundedCornerShape(10.dp)
+                    )
+                    .clickable { viewModel.syncWithBackend() }
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                    .testTag("backend_sync_status_strip")
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = when (syncStatus) {
+                                is SyncStatus.Syncing -> Icons.Default.Sync
+                                is SyncStatus.Success -> Icons.Default.CloudDone
+                                is SyncStatus.Error -> Icons.Default.CloudOff
+                                else -> Icons.Default.Sync
+                            },
+                            contentDescription = null,
+                            tint = when (syncStatus) {
+                                is SyncStatus.Syncing -> Color(0xFF2563EB)
+                                is SyncStatus.Success -> Color(0xFF059669)
+                                is SyncStatus.Error -> Color(0xFFD97706)
+                                else -> Color(0xFF64748B)
+                            },
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = when (val s = syncStatus) {
+                                is SyncStatus.Syncing -> "Syncing live with MongoDB Atlas..."
+                                is SyncStatus.Success -> s.message
+                                is SyncStatus.Error -> s.message
+                                else -> "MongoDB Atlas: Tap to check for new questions"
+                            },
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = when (syncStatus) {
+                                is SyncStatus.Syncing -> Color(0xFF1D4ED8)
+                                is SyncStatus.Success -> Color(0xFF065F46)
+                                is SyncStatus.Error -> Color(0xFF92400E)
+                                else -> Color(0xFF475569)
+                            },
+                            maxLines = 1
+                        )
+                    }
+                    Text(
+                        text = if (isSyncing) "Syncing..." else "Refresh",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2563EB)
+                    )
+                }
+            }
         }
 
         // 3. Section Header: Explore Question Banks

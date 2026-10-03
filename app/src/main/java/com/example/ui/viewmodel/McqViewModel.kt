@@ -11,7 +11,9 @@ import com.example.data.model.Question
 import com.example.data.model.Subject
 import com.example.data.model.TestAttempt
 import com.example.data.model.WeeklyModule
+import com.example.data.remote.NetworkModule
 import com.example.data.repository.McqRepository
+import com.example.data.repository.SyncStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -166,8 +168,28 @@ class McqViewModel(private val repository: McqRepository) : ViewModel() {
     private var timerJob: Job? = null
     private var testStartTime: Long = 0
 
+    // MongoDB Atlas synchronization state
+    val syncStatus: StateFlow<SyncStatus> = repository.syncStatus
+    val isSyncing: StateFlow<Boolean> = repository.isSyncing
+
+    val apiBaseUrl: String
+        get() = NetworkModule.baseUrl
+
     init {
         refreshStats()
+        // Automatically sync from MongoDB through Node.js REST API
+        syncWithBackend()
+    }
+
+    fun syncWithBackend(targetSubjectId: String? = null) {
+        viewModelScope.launch {
+            repository.syncWithBackend(targetSubjectId)
+        }
+    }
+
+    fun updateApiBaseUrl(newUrl: String) {
+        NetworkModule.updateBaseUrl(newUrl)
+        syncWithBackend()
     }
 
     fun selectTab(tab: MainTab) {

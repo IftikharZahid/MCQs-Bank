@@ -27,10 +27,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -39,10 +41,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.repository.SyncStatus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,6 +82,11 @@ fun MoreScreen(
     var dailyReminder by remember { mutableStateOf(true) }
     var offlineSync by remember { mutableStateOf(true) }
     var showDeveloperDialog by remember { mutableStateOf(false) }
+    var showUrlDialog by remember { mutableStateOf(false) }
+    var tempUrl by remember { mutableStateOf(viewModel.apiBaseUrl) }
+
+    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
 
     val whatsappUrl = "https://wa.me/923007971374?text=Assalam-o-Alaikum%20Iftikhar%20Zahid,%20I%20am%20contacting%20you%20regarding%20the%20MCQs%20Bank%20App."
     val facebookUrl = "https://fb.com/IftikharXahid"
@@ -248,6 +258,114 @@ fun MoreScreen(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = Color(0xFF10B981)
                             )
+                        )
+                    }
+
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = BorderLight,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+
+                    // MongoDB Atlas / Node.js API Connection Settings
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFFEFF6FF)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        tint = SubjectBlue,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "MongoDB API Server",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = viewModel.apiBaseUrl,
+                                        fontSize = 11.5.sp,
+                                        color = TextSecondary,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    tempUrl = viewModel.apiBaseUrl
+                                    showUrlDialog = true
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit API URL",
+                                    tint = SubjectBlue,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Sync action button with status
+                        Button(
+                            onClick = { viewModel.syncWithBackend() },
+                            enabled = !isSyncing,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .testTag("sync_mongodb_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SubjectBlue,
+                                disabledContainerColor = SubjectBlue.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isSyncing) "Syncing with MongoDB..." else "Sync Now with MongoDB",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Last sync status message
+                        Text(
+                            text = when (val s = syncStatus) {
+                                is SyncStatus.Syncing -> "Communicating with REST API..."
+                                is SyncStatus.Success -> s.message
+                                is SyncStatus.Error -> s.message
+                                else -> "Ready to synchronize with remote database"
+                            },
+                            fontSize = 11.sp,
+                            color = when (syncStatus) {
+                                is SyncStatus.Success -> Color(0xFF059669)
+                                is SyncStatus.Error -> Color(0xFFD97706)
+                                else -> TextSecondary
+                            },
+                            modifier = Modifier.padding(top = 6.dp)
                         )
                     }
                 }
@@ -477,6 +595,75 @@ fun MoreScreen(
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Close Details", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        )
+    }
+
+    // MongoDB Server URL Configuration Dialog
+    if (showUrlDialog) {
+        AlertDialog(
+            onDismissRequest = { showUrlDialog = false },
+            containerColor = Color.White,
+            titleContentColor = TextPrimary,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    text = "MongoDB API Base URL",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A)
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Enter your Node.js REST API base URL. Use 10.0.2.2 for Android Studio Emulator, or your computer's Wi-Fi IP (e.g. 192.168.x.x) for physical Android devices.",
+                        fontSize = 12.5.sp,
+                        color = Color(0xFF475569),
+                        lineHeight = 17.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = tempUrl,
+                        onValueChange = { tempUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("API Base URL") },
+                        placeholder = { Text("http://10.0.2.2:3000/api/") }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = {
+                            tempUrl = "http://10.0.2.2:3000/api/"
+                        }
+                    ) {
+                        Text("Reset to Emulator Default (10.0.2.2)", fontSize = 11.5.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateApiBaseUrl(tempUrl.trim())
+                        showUrlDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SubjectBlue),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Save & Sync", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showUrlDialog = false },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Cancel", color = TextSecondary)
                 }
             }
         )

@@ -44,6 +44,15 @@ interface QuestionDao {
     @Query("SELECT COUNT(*) FROM questions")
     suspend fun getTotalQuestionCount(): Int
 
+    @Query("SELECT * FROM questions WHERE subjectId = :subjectId AND questionText = :questionText LIMIT 1")
+    suspend fun findExisting(subjectId: String, questionText: String): QuestionEntity?
+
+    @Query("SELECT * FROM questions WHERE id = :id LIMIT 1")
+    suspend fun getQuestionById(id: Int): QuestionEntity?
+
+    @Query("SELECT COUNT(*) FROM questions WHERE subjectId = :subjectId")
+    suspend fun getQuestionsCountBySubject(subjectId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertQuestions(questions: List<QuestionEntity>)
 
