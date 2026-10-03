@@ -3,12 +3,12 @@
 
     <style name="Theme.MyApplication" parent="android:Theme.Material.Light.NoActionBar">
         <!-- Professional pure white splash screen and window background -->
-        <item name="android:windowBackground">@android:color/white</item>
-        <item name="android:colorBackground">@android:color/white</item>
-        <item name="android:statusBarColor">@android:color/white</item>
-        <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:windowBackground">@color/brand_navy_dark</item>
+        <item name="android:colorBackground">@color/brand_navy_dark</item>
+        <item name="android:statusBarColor">@color/brand_navy_dark</item>
+        <item name="android:navigationBarColor">@color/brand_navy_dark</item>
         <!-- Light status bars: dark icons (battery, clock, wifi) on white background -->
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o">false</item>
     </style>
 </resources>

@@ -145,6 +145,7 @@ fun SubjectsScreen(
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(48.dp)
                         .testTag("subjects_search_input")
                 )
             }

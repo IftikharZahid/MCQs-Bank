@@ -65,7 +65,7 @@ fun HomeScreen(
             .background(BackgroundSlate)
             .testTag("home_screen_list"),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 1. Dark Navy Hero Banner (Compact Summary Banner)
         item {

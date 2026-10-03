@@ -62,7 +62,7 @@ fun SubjectCard(
             .border(1.dp, BorderLight, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .testTag("subject_card_${subject.id}")
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -71,7 +71,7 @@ fun SubjectCard(
             // Subject Icon in Solid Rounded Square
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(30.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(subjectColor),
                 contentAlignment = Alignment.Center
