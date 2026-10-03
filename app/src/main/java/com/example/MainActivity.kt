@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_MyApplication)
         super.onCreate(savedInstanceState)
         // Ensure pure white status bar background with dark status bar icons
         enableEdgeToEdge(
@@ -80,15 +81,11 @@ class MainActivity : ComponentActivity() {
                 val selectedSubject by viewModel.selectedSubjectDetail.collectAsStateWithLifecycle()
                 val dailyStreak by viewModel.dailyStreak.collectAsStateWithLifecycle()
 
-                var showSplash by remember { mutableStateOf(true) }
                 var showMenuSheet by remember { mutableStateOf(false) }
                 val sheetState = rememberModalBottomSheetState()
                 val coroutineScope = rememberCoroutineScope()
 
-                if (showSplash) {
-                    com.example.ui.screens.SplashScreen(onSplashFinished = { showSplash = false })
-                } else {
-                    when (currentScreen) {
+                when (currentScreen) {
                         ScreenState.TEST_RUNNER -> {
                             TestRunnerScreen(viewModel = viewModel)
                         }
@@ -172,7 +169,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        }
         }
     }
 }

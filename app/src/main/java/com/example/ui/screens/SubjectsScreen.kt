@@ -80,8 +80,8 @@ fun SubjectsScreen(
                 .fillMaxSize()
                 .background(BackgroundSlate)
                 .testTag("subjects_screen_list"),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // 1. Header Title & Description
             item {

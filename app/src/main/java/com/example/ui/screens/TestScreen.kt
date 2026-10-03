@@ -121,8 +121,8 @@ fun TestScreen(
             .fillMaxSize()
             .background(BackgroundSlate)
             .testTag("test_screen_list"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 1. Continue Learning Banner
         item {

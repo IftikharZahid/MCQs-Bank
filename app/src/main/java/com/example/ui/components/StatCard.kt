@@ -98,11 +98,11 @@ fun StatCard(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color.White)
-            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
+            .border(1.dp, BorderLight, RoundedCornerShape(10.dp))
             .testTag(testTag)
-            .padding(horizontal = 4.dp, vertical = 7.dp),
+            .padding(horizontal = 2.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -111,8 +111,8 @@ fun StatCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(26.dp)
-                    .clip(RoundedCornerShape(7.dp))
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .background(iconBg),
                 contentAlignment = Alignment.Center
             ) {
@@ -120,22 +120,22 @@ fun StatCard(
                     imageVector = icon,
                     contentDescription = label,
                     tint = iconColor,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(12.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             Text(
                 text = value,
-                fontSize = 12.5.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
                 maxLines = 1
             )
             Text(
                 text = label,
-                fontSize = 9.5.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextSecondary,
                 maxLines = 1

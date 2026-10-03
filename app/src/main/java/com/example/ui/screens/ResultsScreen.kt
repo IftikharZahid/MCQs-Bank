@@ -132,8 +132,8 @@ fun ResultsScreen(
                 .fillMaxSize()
                 .background(BackgroundSlate)
                 .testTag("results_screen_list"),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 1. Dashboard Header
             item {
