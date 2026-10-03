@@ -84,6 +84,23 @@ fun TestScreen(
     val weeklyModules by viewModel.weeklyModules.collectAsStateWithLifecycle()
     val allSubjects by viewModel.allSubjects.collectAsStateWithLifecycle()
 
+    val testAttempts by viewModel.testAttempts.collectAsStateWithLifecycle()
+    val lastAttempt = remember(testAttempts) {
+        testAttempts.maxByOrNull { it.timestamp }
+    }
+
+    val displaySubjectTitle = lastAttempt?.subjectTitle ?: "Theory of Automata"
+    val displayTopic = lastAttempt?.topic ?: "Week 02 • Regular Expressions"
+    val displayPercentage = lastAttempt?.scorePercentage ?: 80
+    val displayProgressFraction = displayPercentage / 100f
+    val displayCorrectCount = lastAttempt?.correctCount ?: 32
+    val displayTotalQuestions = lastAttempt?.totalQuestions ?: 40
+
+    // Dynamic cover details
+    val words = displaySubjectTitle.split(" ")
+    val coverLine1 = if (words.isNotEmpty()) words[0].take(8).uppercase() else "THEORY"
+    val coverLine2 = if (words.size > 1) words[1].take(8).uppercase() else "AUTOMATA"
+
     var showSubjectDropdown by remember { mutableStateOf(false) }
     var showTopicDropdown by remember { mutableStateOf(false) }
     var showDifficultyDropdown by remember { mutableStateOf(false) }
@@ -140,7 +157,18 @@ fun TestScreen(
                         }
 
                         Button(
-                            onClick = { viewModel.startConfiguredTest() },
+                            onClick = {
+                                if (lastAttempt != null) {
+                                    viewModel.updateTestConfig(
+                                        subjectId = lastAttempt.subjectId,
+                                        subjectTitle = lastAttempt.subjectTitle,
+                                        topic = lastAttempt.topic,
+                                        difficulty = lastAttempt.difficulty,
+                                        questionsCount = lastAttempt.totalQuestions
+                                    )
+                                }
+                                viewModel.startConfiguredTest()
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = SubjectBlue,
                                 contentColor = Color.White
@@ -186,16 +214,18 @@ fun TestScreen(
                                 modifier = Modifier.padding(4.dp)
                             ) {
                                 Text(
-                                    text = "THEORY OF",
+                                    text = coverLine1,
                                     fontSize = 7.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1
                                 )
                                 Text(
-                                    text = "AUTOMATA",
+                                    text = coverLine2,
                                     fontSize = 7.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = AccentYellow
+                                    color = AccentYellow,
+                                    maxLines = 1
                                 )
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.MenuBook,
@@ -210,16 +240,18 @@ fun TestScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Theory of Automata",
+                                text = displaySubjectTitle,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                maxLines = 1
                             )
                             Text(
-                                text = "Week 02  •  Regular Expressions",
+                                text = displayTopic,
                                 fontSize = 12.sp,
                                 color = TextSecondary,
-                                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+                                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+                                maxLines = 1
                             )
 
                             // Progress Bar
@@ -228,7 +260,7 @@ fun TestScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 LinearProgressIndicator(
-                                    progress = { 0.80f },
+                                    progress = { displayProgressFraction },
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(6.dp)
@@ -241,7 +273,7 @@ fun TestScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
 
                                 Text(
-                                    text = "80%",
+                                    text = "$displayPercentage%",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextPrimary
@@ -249,7 +281,7 @@ fun TestScreen(
                             }
 
                             Text(
-                                text = "32 / 40 Questions",
+                                text = "$displayCorrectCount / $displayTotalQuestions Questions",
                                 fontSize = 11.sp,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(top = 4.dp)
