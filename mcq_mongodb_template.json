@@ -1,0 +1,56 @@
+[
+  {
+    "_id": {
+      "$oid": "651c36b8e2b0c3a504a5cf01"
+    },
+    "subjectId": "theory-of-automata-week-02",
+    "subjectTitle": "Theory of Automata",
+    "topic": "Regular Expressions & Recursive Definitions of Languages",
+    "difficulty": "Medium",
+    "weekNumber": 2,
+    "questionText": "Which of the following regular expressions defines the language containing all strings over {a, b} that end with the substring 'ab'?",
+    "optionA": "a*b*",
+    "optionB": "(a+b)*ab",
+    "optionC": "ab(a+b)*",
+    "optionD": "(ab)*",
+    "correctOption": 1,
+    "explanation": "The regular expression (a+b)*ab represents any sequence of 'a' and 'b' of any length (including empty) followed precisely by the characters 'ab', guaranteeing that every string ends with 'ab'.",
+    "isBookmarked": false
+  },
+  {
+    "_id": {
+      "$oid": "651c36b8e2b0c3a504a5cf02"
+    },
+    "subjectId": "database-systems-week-03",
+    "subjectTitle": "Database Systems",
+    "topic": "Three-Level Schema Architecture & Data Independence",
+    "difficulty": "Easy",
+    "weekNumber": 3,
+    "questionText": "Which level of the ANSI-SPARC database architecture describes how data is physically stored on disk storage?",
+    "optionA": "External schema level",
+    "optionB": "Conceptual schema level",
+    "optionC": "Internal (Physical) schema level",
+    "optionD": "Logical schema level",
+    "correctOption": 2,
+    "explanation": "The Internal schema level describes physical storage structures, access paths, and indexing methods used to keep data persistently stored on hard disks or SSDs.",
+    "isBookmarked": false
+  },
+  {
+    "_id": {
+      "$oid": "651c36b8e2b0c3a504a5cf03"
+    },
+    "subjectId": "computer-architecture-week-04",
+    "subjectTitle": "Computer Architecture",
+    "topic": "Review of Digital Logic and Design & Fundamental Hardware",
+    "difficulty": "Hard",
+    "weekNumber": 4,
+    "questionText": "What type of hazard occurs in a pipelined processor when the execution of an instruction depends on the result of a previous instruction that has not yet completed?",
+    "optionA": "Structural Hazard",
+    "optionB": "Data Hazard",
+    "optionC": "Control Hazard",
+    "optionD": "Branch Hazard",
+    "correctOption": 1,
+    "explanation": "Data Hazards occur when there are read-after-write (RAW), write-after-read (WAR), or write-after-write (WAW) dependencies where operand values are not yet resolved or written back into registers.",
+    "isBookmarked": false
+  }
+]

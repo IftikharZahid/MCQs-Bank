@@ -45,6 +45,7 @@ import com.example.ui.theme.TextSecondary
 fun AppHeader(
     modifier: Modifier = Modifier,
     streakDays: Int = 5,
+    showStreak: Boolean = true,
     showSearch: Boolean = false,
     onSearchClick: () -> Unit = {},
     onMenuClick: () -> Unit = {}
@@ -118,29 +119,31 @@ fun AppHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Tests Performed Badge Pill
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF0FDF4))
-                        .border(1.dp, Color(0xFFBBF7D0), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 7.dp, vertical = 4.dp)
-                        .testTag("header_tests_pill")
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Tests completed",
-                            tint = Color(0xFF059669),
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "$streakDays",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF059669)
-                        )
+                if (showStreak) {
+                    // Tests Performed Badge Pill
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFF0FDF4))
+                            .border(1.dp, Color(0xFFBBF7D0), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                            .testTag("header_tests_pill")
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Tests completed",
+                                tint = Color(0xFF059669),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "$streakDays",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669)
+                            )
+                        }
                     }
                 }
 

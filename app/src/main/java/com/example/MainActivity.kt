@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
                             topBar = {
                                 AppHeader(
                                     streakDays = dailyStreak.currentStreak,
+                                    showStreak = currentTab == MainTab.HOME,
                                     showSearch = currentTab == MainTab.SUBJECTS || currentTab == MainTab.TEST,
                                     onSearchClick = { viewModel.selectTab(MainTab.SUBJECTS) },
                                     onMenuClick = {

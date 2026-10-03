@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "MCQs Question Bank"
+rootProject.name = "MCQs Bank"
 
 include(":app")

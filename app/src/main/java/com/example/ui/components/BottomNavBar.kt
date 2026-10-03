@@ -66,7 +66,7 @@ fun BottomNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -83,21 +83,21 @@ fun BottomNavBar(
                             indication = null,
                             onClick = { onTabSelected(item.tab) }
                         )
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.title,
                         tint = color,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = item.title,
                         color = color,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
             }

@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -85,104 +87,116 @@ fun SplashScreen(
         modifier = modifier
             .fillMaxSize()
             .background(BrandNavyDark)
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .testTag("splash_screen"),
         contentAlignment = Alignment.Center
     ) {
         Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 16.dp, horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(24.dp)
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Animated Crest Emblem
-            Box(
-                modifier = Modifier
-                    .size(90.dp)
-                    .scale(scale.value * pulse.value)
-                    .alpha(alpha.value)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.School,
-                    contentDescription = "Academic Emblem Logo",
-                    tint = AccentYellowDark,
-                    modifier = Modifier.size(52.dp)
-                )
-            }
+            // Invisible top-balancer spacer
+            Spacer(modifier = Modifier.height(1.dp))
 
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Animated App Name / Title
+            // Centered Branding Area
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.alpha(alpha.value)
+                verticalArrangement = Arrangement.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "MCQs",
-                        color = Color.White,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "QUESTION BANK",
-                        color = AccentYellowDark,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                // Animated Crest Emblem
+                Box(
+                    modifier = Modifier
+                        .size(90.dp)
+                        .scale(scale.value * pulse.value)
+                        .alpha(alpha.value)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = "Academic Emblem Logo",
+                        tint = AccentYellowDark,
+                        modifier = Modifier.size(52.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
-                Text(
-                    text = "ACADEMIC PORTAL  •  HIGHER EDUCATION",
-                    color = TextMuted.copy(alpha = 0.8f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp
+                // Animated App Name / Title
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.alpha(alpha.value)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "MCQs",
+                            color = Color.White,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "QUESTION BANK",
+                            color = AccentYellowDark,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "ACADEMIC PORTAL  •  HIGHER EDUCATION",
+                        color = TextMuted.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(48.dp))
+
+                // Minimalist Circular Loader
+                CircularProgressIndicator(
+                    color = AccentYellowDark,
+                    strokeWidth = 2.5.dp,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .alpha(alpha.value)
                 )
             }
 
-            Spacer(modifier = Modifier.height(64.dp))
-
-            // Minimalist Circular Loader
-            CircularProgressIndicator(
-                color = AccentYellowDark,
-                strokeWidth = 2.5.dp,
+            // Safe, Fully Responsive Footer Placement
+            Column(
                 modifier = Modifier
-                    .size(28.dp)
                     .alpha(alpha.value)
-            )
-        }
-
-        // Professional Footer Placement
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp)
-                .alpha(alpha.value),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "DEVELOPED BY",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextMuted.copy(alpha = 0.6f),
-                letterSpacing = 1.5.sp
-            )
-            Text(
-                text = "Iftikhar Zahid",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.9f),
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+                    .padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "DEVELOPED BY",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted.copy(alpha = 0.6f),
+                    letterSpacing = 1.5.sp
+                )
+                Text(
+                    text = "Iftikhar Zahid",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.9f),
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
         }
     }
 }

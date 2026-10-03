@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Subject
@@ -81,7 +82,10 @@ fun SubjectProficiencyChart(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -99,20 +103,26 @@ fun SubjectProficiencyChart(
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Subject Proficiency Breakdown",
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Benchmark target: 70% passing grade",
+                            text = "Benchmark target: 70%",
                             fontSize = 11.sp,
-                            color = TextSecondary
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Sort toggle
                 Box(
@@ -122,13 +132,14 @@ fun SubjectProficiencyChart(
                         .clickable {
                             sortBy = if (sortBy == "Accuracy") "Name" else "Accuracy"
                         }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Sort: $sortBy",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SubjectBlue
+                        fontWeight = FontWeight.Bold,
+                        color = SubjectBlue,
+                        maxLines = 1
                     )
                 }
             }
@@ -227,7 +238,9 @@ fun SubjectBarItem(
                     text = subject.title,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
