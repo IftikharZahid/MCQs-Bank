@@ -80,18 +80,22 @@ class MainActivity : ComponentActivity() {
                 val selectedSubject by viewModel.selectedSubjectDetail.collectAsStateWithLifecycle()
                 val dailyStreak by viewModel.dailyStreak.collectAsStateWithLifecycle()
 
+                var showSplash by remember { mutableStateOf(true) }
                 var showMenuSheet by remember { mutableStateOf(false) }
                 val sheetState = rememberModalBottomSheetState()
                 val coroutineScope = rememberCoroutineScope()
 
-                when (currentScreen) {
-                    ScreenState.TEST_RUNNER -> {
-                        TestRunnerScreen(viewModel = viewModel)
-                    }
+                if (showSplash) {
+                    com.example.ui.screens.SplashScreen(onSplashFinished = { showSplash = false })
+                } else {
+                    when (currentScreen) {
+                        ScreenState.TEST_RUNNER -> {
+                            TestRunnerScreen(viewModel = viewModel)
+                        }
 
-                    ScreenState.TEST_RESULT -> {
-                        TestResultScreen(viewModel = viewModel)
-                    }
+                        ScreenState.TEST_RESULT -> {
+                            TestResultScreen(viewModel = viewModel)
+                        }
 
                     ScreenState.SUBJECT_DETAIL -> {
                         selectedSubject?.let { subject ->
@@ -167,6 +171,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
         }
     }
 }
