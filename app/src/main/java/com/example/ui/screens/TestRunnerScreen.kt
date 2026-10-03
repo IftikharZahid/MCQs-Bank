@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -599,97 +600,105 @@ fun TestRunnerScreen(
         val totalCount = questions.size
         val unansweredCount = totalCount - answeredCount
 
-        AlertDialog(
-            onDismissRequest = { showSubmitDialog = false },
-            containerColor = Color.White,
-            shape = RoundedCornerShape(22.dp),
-            icon = {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFEFF6FF)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AssignmentTurnedIn,
-                        contentDescription = null,
-                        tint = SubjectBlue,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            },
-            title = {
-                Text(
-                    text = "Submit Examination?",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            text = {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showSubmitDialog = false }) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .widthIn(max = 380.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color.White)
+                    .border(1.dp, BorderLight, RoundedCornerShape(18.dp))
+                    .padding(18.dp)
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(SubjectBlue.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AssignmentTurnedIn,
+                            contentDescription = null,
+                            tint = SubjectBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Submit Examination?",
+                        fontSize = 16.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "You have answered $answeredCount of $totalCount questions.",
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         color = Color(0xFF475569),
                         textAlign = TextAlign.Center
                     )
                     if (unansweredCount > 0) {
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(Color(0xFFFEF2F2))
-                                .border(1.dp, Color(0xFFFECACA), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "⚠️ $unansweredCount question(s) remain unanswered.",
                                 color = StatusError,
-                                fontSize = 12.5.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showSubmitDialog = false
-                        viewModel.submitTest()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SubjectBlue,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Confirm & Submit", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showSubmitDialog = false },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF0F172A)
-                    ),
-                    border = BorderStroke(1.dp, Color(0xFFCBD5E1))
-                ) {
-                    Text("Review More", fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showSubmitDialog = false },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155)),
+                            border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                        ) {
+                            Text("Review", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Button(
+                            onClick = {
+                                showSubmitDialog = false
+                                viewModel.submitTest()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SubjectBlue,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Confirm & Submit", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 }
 

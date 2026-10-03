@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.School
@@ -117,20 +118,20 @@ fun AppHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Streak Badge Pill
+                // Tests Performed Badge Pill
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFFFF7ED))
-                        .border(1.dp, Color(0xFFFED7AA), RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF0FDF4))
+                        .border(1.dp, Color(0xFFBBF7D0), RoundedCornerShape(8.dp))
                         .padding(horizontal = 7.dp, vertical = 4.dp)
-                        .testTag("header_streak_pill")
+                        .testTag("header_tests_pill")
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.LocalFireDepartment,
-                            contentDescription = "Streak flame",
-                            tint = Color(0xFFEA580C),
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Tests completed",
+                            tint = Color(0xFF059669),
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
@@ -138,7 +139,7 @@ fun AppHeader(
                             text = "$streakDays",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFEA580C)
+                            color = Color(0xFF059669)
                         )
                     }
                 }

@@ -80,7 +80,7 @@ fun MoreScreen(
 
     val whatsappUrl = "https://wa.me/923007971374?text=Assalam-o-Alaikum%20Iftikhar%20Zahid,%20I%20am%20contacting%20you%20regarding%20the%20MCQs%20Bank%20App."
     val facebookUrl = "https://fb.com/IftikharXahid"
-    val githubUrl = "https://github.com/IftikharXahid"
+    val githubUrl = "https://github.com/IftikharZahid/"
 
     LazyColumn(
         modifier = modifier

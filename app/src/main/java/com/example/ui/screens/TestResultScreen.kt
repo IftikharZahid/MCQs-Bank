@@ -158,50 +158,6 @@ fun TestResultScreen(
                     maxLines = 1
                 )
             }
-
-            // Top Right Action 1: Save Result as PNG in Gallery
-            IconButton(
-                onClick = {
-                    val bitmap = ResultExportHelper.generateProfessionalResultBitmap(context, summary)
-                    ResultExportHelper.saveResultToGallery(context, bitmap, summary.subjectTitle)
-                },
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFF1F5F9))
-                    .border(1.dp, BorderLight, CircleShape)
-                    .testTag("result_save_png_icon_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = "Save Result PNG",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Top Right Action 2: Fixed Print Button (Printer icon)
-            IconButton(
-                onClick = {
-                    val bitmap = ResultExportHelper.generateProfessionalResultBitmap(context, summary)
-                    ResultExportHelper.printResultReport(context, bitmap, summary.subjectTitle)
-                },
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(SubjectBlue.copy(alpha = 0.12f))
-                    .border(1.dp, SubjectBlue.copy(alpha = 0.3f), CircleShape)
-                    .testTag("result_fixed_print_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Print,
-                    contentDescription = "Print Result",
-                    tint = SubjectBlue,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
 
         // Scrollable Academic Review Content
@@ -286,58 +242,61 @@ fun TestResultScreen(
                             ScoreMiniStat(label = "Skipped", count = "${summary.skippedCount}", color = Color(0xFF64748B))
                             ScoreMiniStat(label = "Time", count = formattedDuration, color = SubjectBlue)
                         }
-                    }
-                }
-            }
 
-            // Action Buttons Row (Retake, Save PNG, Done)
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { viewModel.startConfiguredTest() },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(46.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Retake", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                    Button(
-                        onClick = {
-                            val bitmap = ResultExportHelper.generateProfessionalResultBitmap(context, summary)
-                            ResultExportHelper.saveResultToGallery(context, bitmap, summary.subjectTitle)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF059669),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .height(46.dp)
-                            .testTag("result_save_png_button")
-                    ) {
-                        Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Save PNG", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                        // Compact Action Buttons Row (Retake, Save PNG, Done)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.startConfiguredTest() },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Retake", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
 
-                    Button(
-                        onClick = { viewModel.exitTest() },
-                        colors = ButtonDefaults.buttonColors(containerColor = SubjectBlue, contentColor = Color.White),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(46.dp)
-                            .testTag("result_done_button")
-                    ) {
-                        Text("Done", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    val bitmap = ResultExportHelper.generateProfessionalResultBitmap(context, summary)
+                                    ResultExportHelper.saveResultToGallery(context, bitmap, summary.subjectTitle)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF059669),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .testTag("result_save_png_button"),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Save PNG", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = { viewModel.exitTest() },
+                                colors = ButtonDefaults.buttonColors(containerColor = SubjectBlue, contentColor = Color.White),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(0.8f)
+                                    .height(40.dp)
+                                    .testTag("result_done_button"),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("Done", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

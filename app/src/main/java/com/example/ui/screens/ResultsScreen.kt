@@ -43,11 +43,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.Subject
 import com.example.data.model.TestAttempt
+import com.example.ui.components.ResponsiveScaffold
 import com.example.ui.components.charts.AccuracyDistributionCard
 import com.example.ui.components.charts.AccuracyOverTimeChart
 import com.example.ui.components.charts.SubjectProficiencyChart
@@ -124,305 +126,290 @@ fun ResultsScreen(
         }
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(BackgroundSlate)
-            .testTag("results_screen_list"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // 1. Dashboard Header
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Performance Dashboard",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Visualized user progress, accuracy trends, and subject proficiency.",
-                    fontSize = 13.sp,
-                    color = TextSecondary
-                )
-            }
-        }
-
-        // 2. Interactive Subject Filter Tabs (Recharts-style multi-subject selector)
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FilterList,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+    ResponsiveScaffold { screenSizeInfo ->
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .background(BackgroundSlate)
+                .testTag("results_screen_list"),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 1. Dashboard Header
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Filter by Subject",
-                        fontSize = 12.sp,
+                        text = "Performance Dashboard",
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Visualized user progress, accuracy trends, and subject proficiency.",
+                        fontSize = 13.sp,
                         color = TextSecondary
                     )
                 }
+            }
 
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // All Subjects Pill
-                    item {
-                        val isAllSelected = selectedSubjectId == null
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isAllSelected) SubjectBlue else Color.White)
-                                .border(
-                                    1.dp,
-                                    if (isAllSelected) SubjectBlue else BorderLight,
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .clickable { selectedSubjectId = null }
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                                .testTag("subject_filter_all")
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "All Subjects",
-                                    fontSize = 12.5.sp,
-                                    fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isAllSelected) Color.White else TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(if (isAllSelected) Color.White.copy(alpha = 0.25f) else Color(0xFFF1F5F9))
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                ) {
+            // 2. Interactive Subject Filter Tabs (Recharts-style multi-subject selector)
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Filter by Subject",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary
+                        )
+                    }
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // All Subjects Pill
+                        item {
+                            val isAllSelected = selectedSubjectId == null
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isAllSelected) SubjectBlue else Color.White)
+                                    .border(
+                                        1.dp,
+                                        if (isAllSelected) SubjectBlue else BorderLight,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { selectedSubjectId = null }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                                    .testTag("subject_filter_all")
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "${subjects.size}",
+                                        text = "All Subjects",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isAllSelected) Color.White else TextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(if (isAllSelected) Color.White.copy(alpha = 0.25f) else Color(0xFFF1F5F9))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "${subjects.size}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isAllSelected) Color.White else TextSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Individual Subject Filter Pills
+                        items(subjects, key = { it.id }) { subject ->
+                            val isSelected = selectedSubjectId == subject.id
+                            val subjectColor = Color(subject.colorHex)
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) SubjectBlue else Color.White)
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) SubjectBlue else BorderLight,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { selectedSubjectId = subject.id }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .testTag("subject_filter_${subject.id}")
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isSelected) Color.White else subjectColor)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    val shortName = subject.title.split(" ").take(2).joinToString(" ")
+                                    Text(
+                                        text = shortName,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else TextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "${subject.progressPercent}%",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isAllSelected) Color.White else TextSecondary
+                                        color = if (isSelected) Color.White.copy(alpha = 0.9f) else subjectColor
                                     )
                                 }
                             }
                         }
                     }
-
-                    // Individual Subject Filter Pills
-                    items(subjects, key = { it.id }) { subject ->
-                        val isSelected = selectedSubjectId == subject.id
-                        val subjectColor = Color(subject.colorHex)
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) SubjectBlue else Color.White)
-                                .border(
-                                    1.dp,
-                                    if (isSelected) SubjectBlue else BorderLight,
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .clickable { selectedSubjectId = subject.id }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                .testTag("subject_filter_${subject.id}")
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSelected) Color.White else subjectColor)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                val shortName = subject.title.split(" ").take(2).joinToString(" ")
-                                Text(
-                                    text = shortName,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "${subject.progressPercent}%",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else subjectColor
-                                )
-                            }
-                        }
-                    }
                 }
             }
-        }
 
-        // 3. Dynamic Overview & Metric Cards
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White)
-                    .border(1.dp, BorderLight, RoundedCornerShape(20.dp))
-                    .padding(18.dp)
-                    .testTag("results_summary_card")
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = if (selectedSubject != null) "${selectedSubject.title} Index" else "Overall Preparation Index",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.TrendingUp,
-                                    contentDescription = null,
-                                    tint = StatusSuccess,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (improvementOverTime >= 0) "+${improvementOverTime}% improvement over time" else "${improvementOverTime}% trajectory",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = StatusSuccess
-                                )
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (displayAccuracy >= 70) Color(0xFFDCFCE7) else Color(0xFFFEF3C7))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = if (displayAccuracy >= 70) "On Track" else "Needs Practice",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (displayAccuracy >= 70) StatusSuccess else Color(0xFFB45309)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround
-                    ) {
-                        AnalyticStatItem(title = "Accuracy", value = "$displayAccuracy%", color = SubjectBlue)
-                        AnalyticStatItem(title = "Solved", value = "$displaySolved", color = Color(0xFF7C3AED))
-                        AnalyticStatItem(title = "Tests", value = "$displayTests", color = Color(0xFF059669))
-                        AnalyticStatItem(title = "Best Score", value = "$displayBestScore%", color = AccentYellow)
-                    }
-                }
-            }
-        }
-
-        // 4. Recharts-style Accuracy Over Time Area Chart
-        item {
-            AccuracyOverTimeChart(
-                attempts = filteredAttempts,
-                selectedSubjectTitle = selectedSubject?.title
-            )
-        }
-
-        // 5. Recharts-style Radial Donut & Accuracy Distribution Breakdown
-        item {
-            AccuracyDistributionCard(
-                accuracyPercentage = displayAccuracy,
-                totalSolved = displaySolved,
-                subjectTitle = selectedSubject?.title
-            )
-        }
-
-        // 6. Recharts-style Subject-Wise Proficiency & Benchmark Comparative Bar Chart
-        item {
-            SubjectProficiencyChart(
-                subjects = subjects,
-                onSubjectClick = { subject ->
-                    viewModel.showSubjectDetail(subject)
-                }
-            )
-        }
-
-        // 7. Weekly Activity Velocity Bar Chart
-        item {
-            WeeklyActivityChart()
-        }
-
-        // 8. Test History Section Header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    val subjectLabel = selectedSubject?.title?.split(" ")?.take(2)?.joinToString(" ")
-                    Text(
-                        text = if (subjectLabel != null) "$subjectLabel History (${filteredAttempts.size} tests)" else "Session History (${filteredAttempts.size} tests)",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                }
-            }
-        }
-
-        // 9. Recent Test Attempt Items
-        if (filteredAttempts.isEmpty()) {
+            // 3. Dynamic Overview & Metric Cards
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(20.dp))
                         .background(Color.White)
-                        .border(1.dp, BorderLight, RoundedCornerShape(14.dp))
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        .border(1.dp, BorderLight, RoundedCornerShape(20.dp))
+                        .padding(18.dp)
+                        .testTag("results_summary_card")
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (selectedSubject != null) "${selectedSubject.title} Index" else "Overall Preparation Index",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.TrendingUp,
+                                        contentDescription = null,
+                                        tint = StatusSuccess,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (improvementOverTime >= 0) "+${improvementOverTime}% improvement over time" else "${improvementOverTime}% trajectory",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = StatusSuccess
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (displayAccuracy >= 70) Color(0xFFDCFCE7) else Color(0xFFFEF3C7))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (displayAccuracy >= 70) "On Track" else "Needs Practice",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (displayAccuracy >= 70) StatusSuccess else Color(0xFFB45309),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            AnalyticStatItem(title = "Accuracy", value = "$displayAccuracy%", color = SubjectBlue)
+                            AnalyticStatItem(title = "Solved", value = "$displaySolved", color = Color(0xFF7C3AED))
+                            AnalyticStatItem(title = "Tests", value = "$displayTests", color = Color(0xFF059669))
+                            AnalyticStatItem(title = "Best Score", value = "$displayBestScore%", color = AccentYellow)
+                        }
+                    }
+                }
+            }
+
+            // 4. Subject Proficiency Breakdown Card
+            item {
+                SubjectProficiencyChart(
+                    subjects = subjects,
+                    onSubjectClick = { subject ->
+                        viewModel.showSubjectDetail(subject)
+                    }
+                )
+            }
+
+            // 8. Test History Section Header
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        val subjectLabel = selectedSubject?.title?.split(" ")?.take(2)?.joinToString(" ")
                         Text(
-                            text = "No tests recorded for this subject yet.",
-                            fontSize = 13.5.sp,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Medium
+                            text = if (subjectLabel != null) "$subjectLabel History (${filteredAttempts.size} tests)" else "Session History (${filteredAttempts.size} tests)",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
                         )
                     }
                 }
             }
-        } else {
-            items(filteredAttempts, key = { it.id }) { attempt ->
-                TestAttemptHistoryCard(attempt = attempt)
-            }
-        }
 
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
+            // 9. Recent Test Attempt Items
+            if (filteredAttempts.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White)
+                            .border(1.dp, BorderLight, RoundedCornerShape(14.dp))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "No tests recorded for this subject yet.",
+                                fontSize = 13.5.sp,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(filteredAttempts, key = { it.id }) { attempt ->
+                    TestAttemptHistoryCard(attempt = attempt)
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }

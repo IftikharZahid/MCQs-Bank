@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.ResponsiveScaffold
 import com.example.ui.components.SubjectCard
 import com.example.ui.theme.AccentYellow
 import com.example.ui.theme.BackgroundSlate
@@ -70,138 +71,154 @@ fun SubjectsScreen(
 
     val categories = listOf("All", "Core CS", "Systems", "Programming", "Data & AI")
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(BackgroundSlate)
-            .testTag("subjects_screen_list"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        // 1. Header Title & Description
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Subjects",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Explore all subjects and start practicing.",
-                    fontSize = 13.sp,
-                    color = TextSecondary
+    ResponsiveScaffold { screenSizeInfo ->
+        val gridColumns = screenSizeInfo.gridColumns
+        val chunks = filteredSubjects.chunked(gridColumns)
+
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .background(BackgroundSlate)
+                .testTag("subjects_screen_list"),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // 1. Header Title & Description
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Subjects",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Explore all subjects and start practicing.",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            // 2. Search Field
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = {
+                        Text(
+                            text = "Search subjects, topics...",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 14.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear search",
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedBorderColor = SubjectBlue,
+                        unfocusedBorderColor = BorderLight
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("subjects_search_input")
                 )
             }
-        }
 
-        // 2. Search Field
-        item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                placeholder = {
-                    Text(
-                        text = "Search subjects, topics...",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 14.sp
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Color(0xFF64748B),
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                            Icon(
-                                imageVector = Icons.Default.Clear,
-                                contentDescription = "Clear search",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(18.dp)
+            // 3. Category Filter Chips
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { cat ->
+                        val isSelected = selectedCategory == cat
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isSelected) SubjectBlue else Color.White)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) SubjectBlue else BorderLight,
+                                    RoundedCornerShape(20.dp)
+                                )
+                                .clickable { viewModel.selectCategory(cat) }
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                                .testTag("category_chip_$cat")
+                        ) {
+                            Text(
+                                text = cat,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else TextPrimary
                             )
                         }
                     }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedBorderColor = SubjectBlue,
-                    unfocusedBorderColor = BorderLight
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("subjects_search_input")
-            )
-        }
+                }
+            }
 
-        // 3. Category Filter Chips
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                categories.forEach { cat ->
-                    val isSelected = selectedCategory == cat
+            // 4. Subjects List / Responsive Grid Rows
+            if (filteredSubjects.isEmpty()) {
+                item {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) SubjectBlue else Color.White)
-                            .border(
-                                1.dp,
-                                if (isSelected) SubjectBlue else BorderLight,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { viewModel.selectCategory(cat) }
-                            .padding(horizontal = 14.dp, vertical = 7.dp)
-                            .testTag("category_chip_$cat")
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = cat,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else TextPrimary
+                            text = "No subjects match '$searchQuery'",
+                            color = TextSecondary,
+                            fontSize = 14.sp
                         )
                     }
                 }
-            }
-        }
-
-        // 4. Subjects List
-        if (filteredSubjects.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No subjects match '$searchQuery'",
-                        color = TextSecondary,
-                        fontSize = 14.sp
-                    )
+            } else {
+                items(chunks, key = { chunk -> chunk.first().id }) { rowSubjects ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowSubjects.forEach { subject ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                SubjectCard(
+                                    subject = subject,
+                                    onClick = { viewModel.showSubjectDetail(subject) }
+                                )
+                            }
+                        }
+                        repeat(gridColumns - rowSubjects.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
-        } else {
-            items(filteredSubjects, key = { it.id }) { subject ->
-                SubjectCard(
-                    subject = subject,
-                    onClick = { viewModel.showSubjectDetail(subject) }
-                )
-            }
-        }
 
         // 5. Pagination / Load More (if more items exist)
         if (filteredSubjects.size < allSubjects.size && searchQuery.isBlank() && selectedCategory == "All") {
@@ -316,4 +333,5 @@ fun SubjectsScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+  }
 }
