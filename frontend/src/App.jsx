@@ -8,7 +8,7 @@ import {
   Smartphone, QrCode, ExternalLink, Cpu, Database, Network, Boxes, Trophy,
   HelpCircle, ArrowRight, Bell, Home, CheckSquare, Chrome, Monitor,
   User, UserCheck, ChevronDown, Hash, School, ChevronLeft, SkipForward, RotateCcw, AlertTriangle,
-  Mail, Lock, LayoutGrid, List
+  Mail, Lock
 } from 'lucide-react';
 import QuestionCard from './components/QuestionCard.jsx';
 
@@ -1619,7 +1619,6 @@ function PracticePage() {
   const [bookmarks, setBookmarks] = useState(() => {
     try { return JSON.parse(localStorage.getItem('qb_bookmarks') || '[]'); } catch { return []; }
   });
-  const [navViewMode, setNavViewMode] = useState('scroll');
   const navContainerRef = useRef(null);
 
   useEffect(() => {
@@ -1754,29 +1753,6 @@ function PracticePage() {
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => setNavViewMode(m => m === 'scroll' ? 'grid' : 'scroll')}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition ${
-                navViewMode === 'grid'
-                  ? 'bg-brand-navy text-amber-400 border-brand-navy'
-                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-              }`}
-              title={navViewMode === 'scroll' ? "Expand into multi-row responsive grid" : "Collapse to single-row scroll"}
-            >
-              {navViewMode === 'scroll' ? (
-                <>
-                  <LayoutGrid className="w-3 h-3" />
-                  <span className="hidden xs:inline">Grid</span>
-                </>
-              ) : (
-                <>
-                  <List className="w-3 h-3" />
-                  <span className="hidden xs:inline">Row</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
               onClick={() => setInstantFeedback(!instantFeedback)}
               className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition ${
                 instantFeedback
@@ -1802,12 +1778,8 @@ function PracticePage() {
 
         {/* Responsive Question Navigator (Width-Adaptive) */}
         <div
-          ref={navViewMode === 'scroll' ? navContainerRef : undefined}
-          className={`mt-2.5 pt-2 border-t border-slate-100 py-1 px-0.5 ${
-            navViewMode === 'scroll'
-              ? 'flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar scroll-smooth'
-              : 'flex flex-wrap items-center gap-1.5 sm:gap-2 max-h-64 overflow-y-auto'
-          }`}
+          ref={navContainerRef}
+          className="mt-2.5 pt-2 border-t border-slate-100 py-1 px-0.5 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar scroll-smooth"
         >
           {questions.map((q, idx) => {
             const isCurrent = idx === currentIndex;
@@ -1998,7 +1970,6 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [transcript, setTranscript] = useState(null);
   const [loading, setLoading] = useState(() => !API_CACHE.subjects);
-  const [examNavViewMode, setExamNavViewMode] = useState('scroll');
   const examNavContainerRef = useRef(null);
 
   useEffect(() => {
@@ -2456,28 +2427,6 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
               <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 Question Navigator
               </span>
-              <button
-                type="button"
-                onClick={() => setExamNavViewMode(m => m === 'scroll' ? 'grid' : 'scroll')}
-                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border transition ${
-                  examNavViewMode === 'grid'
-                    ? 'bg-brand-navy text-amber-400 border-brand-navy'
-                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                }`}
-                title={examNavViewMode === 'scroll' ? "Switch to multi-row grid" : "Switch to single-row scroll"}
-              >
-                {examNavViewMode === 'scroll' ? (
-                  <>
-                    <LayoutGrid className="w-2.5 h-2.5" />
-                    <span>Grid</span>
-                  </>
-                ) : (
-                  <>
-                    <List className="w-2.5 h-2.5" />
-                    <span>Row</span>
-                  </>
-                )}
-              </button>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 text-[10px] font-semibold text-slate-600">
               <span className="inline-flex items-center gap-1">
@@ -2493,12 +2442,8 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
           </div>
 
           <div
-            ref={examNavViewMode === 'scroll' ? examNavContainerRef : undefined}
-            className={`pb-1 pt-0.5 px-0.5 ${
-              examNavViewMode === 'scroll'
-                ? 'flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar scroll-smooth'
-                : 'flex flex-wrap items-center gap-1.5 sm:gap-2 max-h-64 overflow-y-auto'
-            }`}
+            ref={examNavContainerRef}
+            className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar scroll-smooth pb-1 pt-0.5 px-0.5"
           >
             {session.questions.map((q, idx) => {
               const isCurrent = idx === currentExamIndex;
