@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   BookOpen, GraduationCap, LayoutDashboard, UploadCloud, CheckCircle2,
@@ -111,17 +111,49 @@ function Navbar({ adminUser, onLogout, onOpenAppModal }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearchPopup, setShowSearchPopup] = useState(false);
+  const [popupSearchQuery, setPopupSearchQuery] = useState('');
+  const [searchSubjects, setSearchSubjects] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchInputRef = useRef(null);
   const isAdminActive = location.pathname.startsWith('/admin');
 
-  const handleSearchClick = () => {
-    if (location.pathname !== '/') {
-      navigate('/?focusSearch=true');
-    } else {
-      const searchInput = document.getElementById('main-search-input');
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Close search/notification popups on Escape or route change
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowSearchPopup(false);
+        setShowNotifications(false);
       }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    setShowSearchPopup(false);
+    setShowNotifications(false);
+  }, [location.pathname]);
+
+  const handleSearchClick = () => {
+    if (!showSearchPopup) {
+      setShowNotifications(false);
+      setShowSearchPopup(true);
+      if (searchSubjects.length === 0) {
+        setSearchLoading(true);
+        fetch('/api/subjects')
+          .then(r => r.json())
+          .then(d => {
+            setSearchSubjects(d.data || []);
+            setSearchLoading(false);
+          })
+          .catch(() => setSearchLoading(false));
+      }
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 70);
+    } else {
+      setShowSearchPopup(false);
     }
   };
 
@@ -193,15 +225,163 @@ function Navbar({ adminUser, onLogout, onOpenAppModal }) {
             </Link>
           </nav>
 
-          {/* Quick Search Action */}
-          <button
-            type="button"
-            onClick={handleSearchClick}
-            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-slate-200 transition active:scale-95"
-            title="Search subjects & MCQs"
-          >
-            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-200" />
-          </button>
+          {/* Quick Search Action - Popup Screen directly below Header */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={handleSearchClick}
+              className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition active:scale-95 ${
+                showSearchPopup
+                  ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-400/50 shadow-md'
+                  : 'bg-white/10 hover:bg-white/20 text-slate-200'
+              }`}
+              title="Search subjects & MCQs"
+            >
+              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+
+            {/* Modern, Compact Search Popup Screen directly below Header */}
+            {showSearchPopup && (
+              <>
+                {/* Backdrop to dismiss on tap outside */}
+                <div
+                  className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs"
+                  onClick={() => setShowSearchPopup(false)}
+                />
+
+                <div
+                  className="fixed inset-x-2.5 top-13 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-[calc(100vw-1.25rem)] sm:w-[420px] max-w-lg bg-[#0F172A] border border-slate-700 rounded-2xl p-3 sm:p-3.5 shadow-[0_25px_60px_rgba(0,0,0,0.85)] z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150"
+                >
+                  {/* Search Input Box */}
+                  <div className="flex items-center gap-2 pb-2.5 border-b border-slate-800">
+                    <div className="flex-1 flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/20 transition">
+                      <Search className="w-4 h-4 text-amber-400 shrink-0" />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={popupSearchQuery}
+                        onChange={(e) => setPopupSearchQuery(e.target.value)}
+                        placeholder="Search subjects, MCQs, or topics..."
+                        className="bg-transparent border-none text-white text-xs sm:text-sm placeholder:text-slate-400 w-full focus:outline-none"
+                      />
+                      {popupSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPopupSearchQuery('');
+                            searchInputRef.current?.focus();
+                          }}
+                          className="text-slate-400 hover:text-white p-0.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSearchPopup(false)}
+                      className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition shrink-0"
+                      title="Close search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Results & Quick Picks */}
+                  <div className="py-2 max-h-64 sm:max-h-72 overflow-y-auto no-scrollbar space-y-1.5">
+                    {searchLoading ? (
+                      <div className="py-6 text-center text-xs text-slate-400">
+                        <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-1 text-amber-400" />
+                        Loading subjects...
+                      </div>
+                    ) : (
+                      (() => {
+                        const q = popupSearchQuery.trim().toLowerCase();
+                        const matches = searchSubjects.filter(s =>
+                          !q ||
+                          s.name.toLowerCase().includes(q) ||
+                          (s.code || '').toLowerCase().includes(q) ||
+                          (s.programOrClass || '').toLowerCase().includes(q)
+                        );
+
+                        if (matches.length === 0) {
+                          return (
+                            <div className="py-6 text-center text-xs text-slate-400">
+                              <p className="font-semibold text-slate-300">No subjects found matching "{popupSearchQuery}"</p>
+                              <button
+                                onClick={() => {
+                                  navigate('/catalog');
+                                  setShowSearchPopup(false);
+                                }}
+                                className="mt-2 text-amber-400 hover:underline text-[11px] font-medium"
+                              >
+                                View all subjects in Catalog →
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <>
+                            <div className="flex items-center justify-between px-1 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                              <span>{q ? `Matching Subjects (${matches.length})` : 'Popular Subjects'}</span>
+                              <span className="text-slate-500 font-normal">Tap to practice</span>
+                            </div>
+                            {matches.map(sub => (
+                              <div
+                                key={sub._id}
+                                onClick={() => {
+                                  navigate(`/practice?subjectId=${sub._id}`);
+                                  setShowSearchPopup(false);
+                                }}
+                                className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/70 hover:border-amber-400/50 transition cursor-pointer flex items-center justify-between group"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-400/20 text-amber-400 flex items-center justify-center shrink-0 font-bold text-xs group-hover:bg-amber-400 group-hover:text-slate-950 transition">
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-xs sm:text-sm text-white group-hover:text-amber-300 transition truncate">
+                                      {sub.name}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 truncate">
+                                      {sub.questionCount || 0} MCQs • {sub.bookCount || sub.books?.length || 1} Modules
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="hidden xs:inline text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                                    Practice →
+                                  </span>
+                                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-400 group-hover:translate-x-0.5 transition" />
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        );
+                      })()
+                    )}
+                  </div>
+
+                  {/* Popup Footer */}
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="hidden sm:inline text-slate-500">ESC to close</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate('/catalog');
+                        setShowSearchPopup(false);
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-semibold transition ml-auto flex items-center gap-1 text-[11px]"
+                    >
+                      <span>Explore all subjects</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Notifications Bell with unread dot */}
           <div className="relative">
