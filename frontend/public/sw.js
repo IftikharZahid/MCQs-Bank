@@ -1,22 +1,18 @@
 // Academic Question Bank & Examination Portal - Service Worker
-const CACHE_NAME = 'mcqs-bank-cache-v1';
+const CACHE_NAME = 'mcqs-bank-cache-v2';
 
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.svg',
-  '/pwa-192x192.png',
-  '/pwa-512x512.png',
-  '/pwa-maskable-192x192.png',
-  '/pwa-maskable-512x512.png'
+  '/favicon.svg'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[PWA] Precache warning (non-fatal):', err);
+        console.warn('[PWA] Precache warning:', err);
       });
     })
   );
@@ -42,42 +38,34 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Ignore non-HTTP/HTTPS and non-GET requests
-  if (req.method !== 'GET' || !url.protocol.startsWith('http')) {
+  // 1. Bypass Service Worker completely for API requests and non-GET requests
+  if (req.method !== 'GET' || !url.protocol.startsWith('http') || url.pathname.startsWith('/api')) {
     return;
   }
 
-  // Network-first strategy for dynamic /api endpoints
-  if (url.pathname.startsWith('/api')) {
-    event.respondWith(
-      fetch(req).catch(() => {
-        return caches.match(req);
-      })
-    );
-    return;
-  }
-
-  // Stale-while-revalidate for static assets & HTML
+  // 2. Safe Cache-First / Stale-While-Revalidate for static assets
   event.respondWith(
     caches.match(req).then((cachedResponse) => {
-      const fetchPromise = fetch(req)
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(req)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
             const copy = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(req, copy);
+              cache.put(req, copy).catch(() => {});
             });
           }
           return networkResponse;
         })
-        .catch(() => {
-          // If offline and navigating to a page, fallback to cached index.html for SPA router
+        .catch(async () => {
           if (req.mode === 'navigate') {
-            return caches.match('/index.html') || caches.match('/');
+            const fallback = await caches.match('/index.html');
+            if (fallback) return fallback;
           }
+          return new Response('Network unavailable', { status: 503, statusText: 'Offline' });
         });
-
-      return cachedResponse || fetchPromise;
     })
   );
 });
