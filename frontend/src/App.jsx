@@ -107,6 +107,173 @@ function getSubjectTheme(name = '') {
 }
 
 /* ==========================================================================
+ * STUDENT ACADEMIC PROGRESS & RECENT ACTIVITY HELPER
+ * ======================================================================== */
+const PROGRESS_STORAGE_KEY = 'academic_student_progress';
+
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return 'Recently';
+  const diffSec = Math.floor((Date.now() - Number(timestamp)) / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}d ago`;
+}
+
+function getStudentProgressData() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
+    if (!raw) return { questions: {}, recentActivity: null, examHistory: [] };
+    const parsed = JSON.parse(raw);
+    return {
+      questions: parsed.questions || {},
+      recentActivity: parsed.recentActivity || null,
+      examHistory: Array.isArray(parsed.examHistory) ? parsed.examHistory : []
+    };
+  } catch {
+    return { questions: {}, recentActivity: null, examHistory: [] };
+  }
+}
+
+function saveStudentProgressData(data) {
+  try {
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(data));
+    window.dispatchEvent(new CustomEvent('academic_progress_updated', { detail: data }));
+  } catch {}
+}
+
+function recordQuestionProgress({ questionId, subjectId, subjectName, isCorrect, selectedOption }) {
+  if (!questionId) return;
+  const current = getStudentProgressData();
+  const normalizedSubId = subjectId ? String(subjectId) : 'general';
+
+  current.questions[String(questionId)] = {
+    subjectId: normalizedSubId,
+    subjectName: subjectName || current.questions[String(questionId)]?.subjectName || '',
+    isCorrect: Boolean(isCorrect),
+    selectedOption,
+    updatedAt: Date.now()
+  };
+
+  if (normalizedSubId && normalizedSubId !== 'general') {
+    const questionsInSub = Object.values(current.questions).filter(q => q.subjectId === normalizedSubId);
+    current.recentActivity = {
+      type: 'practice',
+      modeTitle: 'Practice Session',
+      subjectId: normalizedSubId,
+      subjectName: subjectName || current.recentActivity?.subjectName || 'Current Subject',
+      solvedInSubject: questionsInSub.length,
+      updatedAt: Date.now()
+    };
+  }
+
+  saveStudentProgressData(current);
+}
+
+function recordRecentActivitySession({ type = 'practice', subjectId, subjectName, totalQuestions, score, percentage }) {
+  if (!subjectId) return;
+  const current = getStudentProgressData();
+  const normalizedSubId = String(subjectId);
+  const questionsInSub = Object.values(current.questions).filter(q => q.subjectId === normalizedSubId);
+
+  current.recentActivity = {
+    type,
+    modeTitle: type === 'exam' ? 'Official Exam Simulation' : 'Practice Session',
+    subjectId: normalizedSubId,
+    subjectName: subjectName || current.recentActivity?.subjectName || 'Current Subject',
+    solvedInSubject: questionsInSub.length,
+    totalQuestions: totalQuestions || current.recentActivity?.totalQuestions || 0,
+    score: score !== undefined ? score : null,
+    percentage: percentage !== undefined ? percentage : null,
+    updatedAt: Date.now()
+  };
+
+  saveStudentProgressData(current);
+}
+
+function recordExamAttemptProgress({ subjectId, subjectName, totalQuestions, score, percentage, passed, questions }) {
+  const current = getStudentProgressData();
+  const normalizedSubId = subjectId ? String(subjectId) : '';
+
+  if (Array.isArray(questions)) {
+    questions.forEach(item => {
+      if (item.questionId) {
+        current.questions[String(item.questionId)] = {
+          subjectId: normalizedSubId,
+          subjectName: subjectName || '',
+          isCorrect: Boolean(item.isCorrect),
+          selectedOption: item.selectedOption,
+          updatedAt: Date.now()
+        };
+      }
+    });
+  }
+
+  const examRecord = {
+    subjectId: normalizedSubId,
+    subjectName: subjectName || 'Exam',
+    totalQuestions: totalQuestions || 0,
+    score: score || 0,
+    percentage: percentage || 0,
+    passed: Boolean(passed),
+    completedAt: Date.now()
+  };
+
+  current.examHistory = [examRecord, ...(current.examHistory || [])].slice(0, 20);
+
+  current.recentActivity = {
+    type: 'exam',
+    modeTitle: 'Official Exam Simulation',
+    subjectId: normalizedSubId,
+    subjectName: subjectName || 'Exam',
+    totalQuestions: totalQuestions || 0,
+    score: score || 0,
+    percentage: percentage || 0,
+    passed: Boolean(passed),
+    updatedAt: Date.now()
+  };
+
+  saveStudentProgressData(current);
+}
+
+function getSubjectSolvedStats(subjectId, totalQuestionsInSubject = 0) {
+  const current = getStudentProgressData();
+  const normalizedSubId = subjectId ? String(subjectId) : '';
+  if (!normalizedSubId) return { solvedCount: 0, percentage: 0, correctCount: 0 };
+
+  const solvedList = Object.values(current.questions).filter(q => q.subjectId === normalizedSubId);
+  const solvedCount = solvedList.length;
+  const correctCount = solvedList.filter(q => q.isCorrect).length;
+  const total = Number(totalQuestionsInSubject) || 0;
+  const percentage = total > 0 ? Math.min(100, Math.round((solvedCount / total) * 100)) : 0;
+
+  return { solvedCount, percentage, correctCount };
+}
+
+function getOverallStudentStats(totalBankQuestions = 0) {
+  const current = getStudentProgressData();
+  const allSolved = Object.values(current.questions);
+  const totalSolved = allSolved.length;
+  const totalCorrect = allSolved.filter(q => q.isCorrect).length;
+  const total = Number(totalBankQuestions) || 0;
+  const overallPercentage = total > 0 ? Math.min(100, Math.round((totalSolved / total) * 100)) : 0;
+  const accuracyRate = totalSolved > 0 ? Math.round((totalCorrect / totalSolved) * 100) : 0;
+  const examsTaken = current.examHistory ? current.examHistory.length : 0;
+
+  return {
+    totalSolved,
+    totalCorrect,
+    overallPercentage,
+    accuracyRate,
+    examsTaken,
+    recentActivity: current.recentActivity
+  };
+}
+
+/* ==========================================================================
  * GLOBAL CLIENT CACHE FOR INSTANT NAVIGATION
  * ======================================================================== */
 const API_CACHE = {
@@ -1010,11 +1177,12 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
 /* ==========================================================================
  * 1. STUDENT HOMEPAGE
  * ======================================================================== */
-function HomePage({ onOpenAppModal }) {
+function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   const [status, setStatus] = useState(() => API_CACHE.status || { stats: { subjects: 0, books: 0, questions: 0, exams: 0 } });
   const [subjects, setSubjects] = useState(() => API_CACHE.subjects || []);
   const [recentExams, setRecentExams] = useState([]);
   const [loading, setLoading] = useState(() => !API_CACHE.subjects);
+  const [progressData, setProgressData] = useState(() => getStudentProgressData());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -1042,12 +1210,22 @@ function HomePage({ onOpenAppModal }) {
       .then(r => r.json())
       .then(d => setRecentExams(d.data || []))
       .catch(() => {});
+
+    const handleSync = () => setProgressData(getStudentProgressData());
+    window.addEventListener('academic_progress_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('academic_progress_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, []);
 
   const filteredSubjects = subjects;
+  const totalBankQuestions = status.stats?.questions || subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) || 158;
+  const overallStats = getOverallStudentStats(totalBankQuestions);
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-6 space-y-3.5 sm:space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
       {/* 1. HERO CARD (Compact & Professional Academic Standards) */}
       <section className="bg-gradient-to-r from-[#0B1536] via-[#0E1B40] to-[#14265A] text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 lg:py-6 lg:px-8 shadow-lg border border-slate-800/80 relative overflow-hidden">
         {/* Subtle ambient glows */}
@@ -1142,7 +1320,7 @@ function HomePage({ onOpenAppModal }) {
         </div>
       </section>
 
-      {/* 2. SUMMARY STATS CARD (Faithful to Mockup: Single white card, 4 metrics in one line) */}
+      {/* 2. SUMMARY STATS CARD (Connected to Real Student Metrics) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-2 sm:p-4">
         <div className="grid grid-cols-4 divide-x divide-slate-100 items-center text-center">
           {/* Metric 1: Books */}
@@ -1164,41 +1342,248 @@ function HomePage({ onOpenAppModal }) {
               <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
             <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
-              {status.stats?.questions || 158}
+              {totalBankQuestions}
             </span>
             <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
               Total MCQs
             </span>
           </div>
 
-          {/* Metric 3: Practice Tests */}
+          {/* Metric 3: Solved MCQs by Candidate */}
           <div className="flex flex-col items-center justify-center px-0.5 sm:px-2">
             <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
               <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
             <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
-              {Math.max(status.stats?.exams || 0, 25)}+
+              {overallStats.totalSolved}
             </span>
             <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
-              Practice Tests
+              Solved MCQs
             </span>
           </div>
 
-          {/* Metric 4: Average Score */}
+          {/* Metric 4: Bank Solved % */}
           <div className="flex flex-col items-center justify-center px-0.5 sm:px-2">
             <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1">
               <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
             <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
-              78%
+              {overallStats.overallPercentage}%
             </span>
             <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
-              Average Score
+              Bank Solved
             </span>
           </div>
         </div>
       </div>
 
+      {/* 2.5 CANDIDATE ACADEMIC PROGRESS & MASTERY DASHBOARD */}
+      <section className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-navy to-blue-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+              {studentUser?.name ? studentUser.name.charAt(0).toUpperCase() : <GraduationCap className="w-5 h-5 text-amber-400" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                  {studentUser ? studentUser.name : 'Candidate Preparation Workspace'}
+                </h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {studentUser ? 'Candidate Logged In' : 'Active Browser Session'}
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                {studentUser
+                  ? `${studentUser.className || 'Academic Degree'}${studentUser.rollNo ? ` • Roll: ${studentUser.rollNo}` : ''}${studentUser.institution ? ` • ${studentUser.institution}` : ''}`
+                  : 'Track your solved questions, accuracy rate, and syllabus completion in real-time'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            {studentUser ? (
+              <button
+                type="button"
+                onClick={onOpenStudentLogin}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition flex items-center gap-1.5"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Candidate Profile</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenStudentLogin}
+                className="px-3.5 py-1.5 rounded-xl bg-brand-navy text-amber-400 hover:bg-slate-800 text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Candidate Login</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Overall Progress Bar Across All Questions in Bank */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-700 flex items-center gap-1.5">
+              <span>Overall Question Bank Mastery</span>
+              <span className="text-slate-400 font-normal">({overallStats.totalSolved} of {totalBankQuestions} MCQs Solved)</span>
+            </span>
+            <span className="font-black text-sm text-blue-600">
+              {overallStats.overallPercentage}%
+            </span>
+          </div>
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/60 relative">
+            <div
+              className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-amber-400 rounded-full transition-all duration-700 shadow-sm"
+              style={{ width: `${Math.max(overallStats.overallPercentage, overallStats.totalSolved > 0 ? 3 : 0)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 4 Performance Chips */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
+          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Solved MCQs</span>
+            <span className="text-xs sm:text-sm font-black text-slate-900">{overallStats.totalSolved} Questions</span>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Correct Answers</span>
+            <span className="text-xs sm:text-sm font-black text-emerald-600">{overallStats.totalCorrect} Correct</span>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Accuracy Rate</span>
+            <span className="text-xs sm:text-sm font-black text-blue-600">{overallStats.accuracyRate}%</span>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Tests & Exams</span>
+            <span className="text-xs sm:text-sm font-black text-purple-600">{overallStats.examsTaken} Completed</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. RECENT ACTIVITY / RESUME PREPARATION CARD */}
+      {(progressData.recentActivity || subjects.length > 0) && (
+        (() => {
+          const act = progressData.recentActivity;
+          const targetSub = act?.subjectId
+            ? subjects.find(s => String(s._id) === String(act.subjectId))
+            : (subjects[0] || null);
+
+          if (!targetSub && !act) return null;
+
+          const subTheme = targetSub ? getSubjectTheme(targetSub.name) : {
+            bg: 'bg-blue-600',
+            text: 'text-blue-600',
+            lightBg: 'bg-blue-50',
+            icon: BookOpen,
+            progressColor: 'bg-blue-600'
+          };
+          const SubIcon = subTheme.icon;
+          const subId = targetSub?._id || act?.subjectId;
+          const subName = targetSub?.name || act?.subjectName || 'Academic Course';
+          const totalInSub = targetSub?.questionCount || act?.totalQuestions || 0;
+          const subStats = getSubjectSolvedStats(subId, totalInSub);
+          const isExamMode = act?.type === 'exam';
+
+          return (
+            <section className="bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 border border-blue-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
+                  {/* Subject Theme Squircle */}
+                  <div className={`w-12 h-12 rounded-2xl ${subTheme.bg} text-white flex items-center justify-center shadow-md shrink-0`}>
+                    <SubIcon className="w-6 h-6 stroke-[2.2]" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
+                        <span>RECENT STUDY ACTIVITY</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        {isExamMode ? 'Official Exam' : 'Practice Mode'}
+                      </span>
+                      {act?.updatedAt && (
+                        <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{formatTimeAgo(act.updatedAt)}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 truncate">
+                      {subName}
+                    </h3>
+
+                    {/* Progress details for this recent subject */}
+                    <div className="mt-2 space-y-1 max-w-md">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-600 font-medium">
+                          {subStats.solvedCount > 0 ? (
+                            <>
+                              <strong className="text-slate-900 font-bold">{subStats.solvedCount}</strong> of {totalInSub} MCQs Completed
+                            </>
+                          ) : (
+                            <span>Ready to begin practicing this syllabus</span>
+                          )}
+                        </span>
+                        <span className="font-black text-blue-600">{subStats.percentage}%</span>
+                      </div>
+                      <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${subTheme.progressColor} rounded-full transition-all duration-500`}
+                          style={{ width: `${subStats.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direct Action Buttons */}
+                <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      recordRecentActivitySession({
+                        type: 'practice',
+                        subjectId: subId,
+                        subjectName: subName,
+                        totalQuestions: totalInSub
+                      });
+                      navigate(`/practice?subjectId=${subId}`);
+                    }}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-brand-navy hover:bg-slate-800 text-amber-400 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Resume Practice →</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      recordRecentActivitySession({
+                        type: 'exam',
+                        subjectId: subId,
+                        subjectName: subName,
+                        totalQuestions: totalInSub
+                      });
+                      navigate(`/exam?subjectId=${subId}`);
+                    }}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-bold border border-slate-200 shadow-xs transition active:scale-95"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Start Exam</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          );
+        })()
+      )}
 
       {/* 4. EXPLORE QUESTION BANKS SECTION */}
       <div className="space-y-4">
@@ -1219,7 +1604,7 @@ function HomePage({ onOpenAppModal }) {
           </button>
         </div>
 
-        {/* Subject Cards (Mockup styling: Colored squircle icon, title, mcqs + modules count, progress bar, chevron) */}
+        {/* Subject Cards with Real Student Progress Bars */}
         {loading && filteredSubjects.length === 0 ? (
           <div className="py-12 bg-white rounded-2xl border border-slate-200/90 shadow-sm flex flex-col items-center justify-center text-center animate-fadeIn">
             <div className="w-9 h-9 rounded-full border-3 border-amber-400/20 border-t-amber-500 animate-spin mb-3" />
@@ -1232,11 +1617,20 @@ function HomePage({ onOpenAppModal }) {
             const theme = getSubjectTheme(sub.name);
             const IconComponent = theme.icon;
             const moduleCount = sub.bookCount || sub.books?.length || 1;
+            const subStats = getSubjectSolvedStats(sub._id, sub.questionCount || 0);
 
             return (
               <div
                 key={sub._id}
-                onClick={() => navigate(`/practice?subjectId=${sub._id}`)}
+                onClick={() => {
+                  recordRecentActivitySession({
+                    type: 'practice',
+                    subjectId: sub._id,
+                    subjectName: sub.name,
+                    totalQuestions: sub.questionCount || 0
+                  });
+                  navigate(`/practice?subjectId=${sub._id}`);
+                }}
                 className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition group flex flex-col justify-between cursor-pointer"
               >
                 <div>
@@ -1260,12 +1654,28 @@ function HomePage({ onOpenAppModal }) {
                         <span>{String(moduleCount).padStart(2, '0')} Modules</span>
                       </div>
 
-                      {/* Mockup Progress Bar */}
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className={`h-full ${theme.progressColor} rounded-full`} style={{ width: '0%' }} />
+                      {/* Actual Student Subject Progress Bar */}
+                      <div className="mt-2.5">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="font-semibold text-slate-500">
+                            {subStats.solvedCount > 0 ? (
+                              <span className="text-slate-800 font-bold">
+                                {subStats.solvedCount} of {sub.questionCount || 0} Solved
+                              </span>
+                            ) : (
+                              <span>Subject Progress</span>
+                            )}
+                          </span>
+                          <span className={`font-black ${subStats.percentage > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                            {subStats.percentage}%
+                          </span>
                         </div>
-                        <span className="text-[11px] font-bold text-slate-500">0%</span>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${theme.progressColor} rounded-full transition-all duration-500`}
+                            style={{ width: `${subStats.percentage}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1276,6 +1686,12 @@ function HomePage({ onOpenAppModal }) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      recordRecentActivitySession({
+                        type: 'practice',
+                        subjectId: sub._id,
+                        subjectName: sub.name,
+                        totalQuestions: sub.questionCount || 0
+                      });
                       navigate(`/practice?subjectId=${sub._id}`);
                     }}
                     className="flex-1 py-1.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition text-center"
@@ -1285,6 +1701,12 @@ function HomePage({ onOpenAppModal }) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      recordRecentActivitySession({
+                        type: 'exam',
+                        subjectId: sub._id,
+                        subjectName: sub.name,
+                        totalQuestions: sub.questionCount || 0
+                      });
                       navigate(`/exam?subjectId=${sub._id}`);
                     }}
                     className="flex-1 py-1.5 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition text-center"
@@ -1578,7 +2000,15 @@ function CatalogPage() {
                 <div className="flex items-center gap-2 mt-3.5 pt-3 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => navigate(`/practice?bookId=${book._id}`)}
+                    onClick={() => {
+                      recordRecentActivitySession({
+                        type: 'practice',
+                        subjectId: book.subjectId?._id || book.subjectId,
+                        subjectName: book.subjectId?.name || book.title,
+                        totalQuestions: book.questionCount || 0
+                      });
+                      navigate(`/practice?bookId=${book._id}`);
+                    }}
                     className="flex-1 py-1.5 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1 active:scale-98"
                   >
                     <Play className="w-3 h-3 text-amber-400" />
@@ -1586,7 +2016,15 @@ function CatalogPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => navigate(`/exam?bookId=${book._id}`)}
+                    onClick={() => {
+                      recordRecentActivitySession({
+                        type: 'exam',
+                        subjectId: book.subjectId?._id || book.subjectId,
+                        subjectName: book.subjectId?.name || book.title,
+                        totalQuestions: book.questionCount || 0
+                      });
+                      navigate(`/exam?bookId=${book._id}`);
+                    }}
                     className="flex-1 py-1.5 px-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center justify-center gap-1 active:scale-98"
                   >
                     <Award className="w-3 h-3 text-amber-600" />
@@ -1643,8 +2081,32 @@ function PracticePage() {
         API_CACHE.questions[key] = list;
         setQuestions(list);
         setCurrentIndex(0);
-        setAnswers({});
+
+        // Restore any previously answered questions from student progress
+        const progress = getStudentProgressData();
+        const existingAnswers = {};
+        list.forEach(q => {
+          if (progress.questions[q._id] && progress.questions[q._id].selectedOption !== undefined) {
+            existingAnswers[q._id] = progress.questions[q._id].selectedOption;
+          }
+        });
+        setAnswers(existingAnswers);
         setSkippedQuestions(new Set());
+
+        if (list.length > 0) {
+          const firstQ = list[0];
+          const subId = (typeof firstQ.subjectId === 'object' ? firstQ.subjectId?._id : firstQ.subjectId) || params.get('subjectId');
+          const subName = typeof firstQ.subjectId === 'object' ? firstQ.subjectId?.name : null;
+          if (subId) {
+            recordRecentActivitySession({
+              type: 'practice',
+              subjectId: subId,
+              subjectName: subName || 'Practice Session',
+              totalQuestions: list.length
+            });
+          }
+        }
+
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -1664,6 +2126,18 @@ function PracticePage() {
       const next = new Set(prev);
       next.delete(q._id);
       return next;
+    });
+
+    const isCorrect = optIdx === q.correctAnswer;
+    const subId = (typeof q.subjectId === 'object' ? q.subjectId?._id : q.subjectId) || new URLSearchParams(location.search).get('subjectId');
+    const subName = typeof q.subjectId === 'object' ? q.subjectId?.name : null;
+
+    recordQuestionProgress({
+      questionId: q._id,
+      subjectId: subId,
+      subjectName: subName,
+      isCorrect,
+      selectedOption: optIdx
     });
   };
 
@@ -2009,6 +2483,21 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
       if (data.success) {
         setTranscript(data.data);
         setShowSubmitModal(false);
+
+        const chosenSub = subjects.find(s => s._id === (session.subjectId?._id || session.subjectId || config.subjectId));
+        recordExamAttemptProgress({
+          subjectId: session.subjectId?._id || session.subjectId || config.subjectId,
+          subjectName: chosenSub?.name || session.title,
+          totalQuestions: session.questions?.length,
+          score: data.data?.summary?.obtainedMarks,
+          percentage: data.data?.summary?.percentage,
+          passed: data.data?.summary?.passed,
+          questions: (session.questions || []).map(q => ({
+            questionId: q._id,
+            isCorrect: answers[q._id] === q.correctAnswer,
+            selectedOption: answers[q._id]
+          }))
+        });
       } else {
         alert(data.message || 'Failed to submit exam.');
       }
@@ -2085,6 +2574,14 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
       setCurrentExamIndex(0);
       setShowSubmitModal(false);
       setSecondsLeft(data.durationMinutes * 60);
+
+      const chosenSub = subjects.find(s => s._id === config.subjectId);
+      recordRecentActivitySession({
+        type: 'exam',
+        subjectId: config.subjectId,
+        subjectName: chosenSub?.name || 'Official Exam Simulation',
+        totalQuestions: config.questionCount
+      });
     } else {
       alert(data.message || 'Could not start examination');
     }
@@ -4965,7 +5462,16 @@ export default function App() {
       />
       <main key={location.pathname} className="flex-1 pb-16 md:pb-0 animate-fadeIn">
         <Routes>
-          <Route path="/" element={<HomePage onOpenAppModal={() => setIsAppModalOpen(true)} />} />
+          <Route
+            path="/"
+            element={
+              <HomePage
+                studentUser={studentUser}
+                onOpenStudentLogin={() => setIsStudentModalOpen(true)}
+                onOpenAppModal={() => setIsAppModalOpen(true)}
+              />
+            }
+          />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route
