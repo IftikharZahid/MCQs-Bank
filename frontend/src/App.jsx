@@ -332,11 +332,12 @@ function TopProgressBar() {
 function AcademicLoader({
   title = "Loading Assessment Content",
   subtitle = "Accessing verified syllabus question bank...",
+  badge = "Curriculum-Aligned Prep",
   compact = false
 }) {
   if (compact) {
     return (
-      <div className="flex items-center justify-center gap-3 py-10 text-slate-500 animate-fadeIn">
+      <div className="flex items-center justify-center gap-3 py-8 text-slate-500 animate-fadeIn">
         <div className="w-5 h-5 rounded-full border-2 border-amber-400/30 border-t-amber-500 animate-spin" />
         <span className="text-xs font-semibold text-slate-600">{title}</span>
       </div>
@@ -344,22 +345,24 @@ function AcademicLoader({
   }
 
   return (
-    <div className="min-h-[55vh] flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
-      <div className="relative mb-5">
-        <div className="w-16 h-16 rounded-full border-[3px] border-amber-400/20 border-t-amber-400 animate-spin" />
+    <div className="min-h-[42vh] flex flex-col items-center justify-center p-6 sm:p-8 text-center animate-fadeIn">
+      <div className="relative mb-4 sm:mb-5">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-[3px] border-amber-400/20 border-t-amber-400 animate-spin" />
         <div className="absolute inset-1.5 rounded-full border-[2px] border-blue-500/20 border-b-blue-400 animate-spin [animation-direction:reverse] [animation-duration:1.5s]" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-xl bg-slate-900 border border-amber-400/40 text-amber-400 flex items-center justify-center shadow-md animate-pulse">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-900 border border-amber-400/40 text-amber-400 flex items-center justify-center shadow-md animate-pulse">
             <GraduationCap className="w-4 h-4 text-amber-400" />
           </div>
         </div>
       </div>
-      <h3 className="text-base font-bold text-slate-800 tracking-tight">{title}</h3>
+      <h3 className="text-sm sm:text-base font-bold text-slate-800 tracking-tight">{title}</h3>
       <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">{subtitle}</p>
-      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[10px] font-semibold text-slate-500">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-        <span>Curriculum-Aligned Prep</span>
-      </div>
+      {badge && (
+        <div className="mt-3.5 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[10px] font-semibold text-slate-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+          <span>{badge}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -3366,6 +3369,8 @@ function AdminPanel({ adminUser, setAdminUser }) {
   const [authError, setAuthError] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
 
   // Data states
   const [stats, setStats] = useState(null);
@@ -3413,6 +3418,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
 
   // Refresh all admin data
   const refreshAdminData = async () => {
+    setDataLoading(true);
     try {
       const headers = getAuthHeaders();
       const [statsRes, subRes, booksRes] = await Promise.all([
@@ -3438,11 +3444,14 @@ function AdminPanel({ adminUser, setAdminUser }) {
       }
     } catch (err) {
       console.error('Failed to refresh admin data:', err);
+    } finally {
+      setDataLoading(false);
     }
   };
 
   // Fetch questions with current filters
   const fetchQuestions = async (page = 1) => {
+    setQuestionsLoading(true);
     try {
       const headers = getAuthHeaders();
       const params = new URLSearchParams({
@@ -3460,6 +3469,8 @@ function AdminPanel({ adminUser, setAdminUser }) {
       }
     } catch (err) {
       console.error('Failed to fetch questions:', err);
+    } finally {
+      setQuestionsLoading(false);
     }
   };
 
@@ -3947,10 +3958,11 @@ function AdminPanel({ adminUser, setAdminUser }) {
           </button>
           <button
             onClick={refreshAdminData}
+            disabled={dataLoading}
             title="Refresh statistics and data"
-            className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+            className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${dataLoading ? 'animate-spin text-blue-600' : ''}`} />
           </button>
           <button
             onClick={handleLogout}
@@ -4041,7 +4053,16 @@ function AdminPanel({ adminUser, setAdminUser }) {
       {/* ====================================================================
        * TAB 1: DASHBOARD & OVERVIEW
        * ================================================================== */}
-      {activeTab === 'dashboard' && stats && (
+      {activeTab === 'dashboard' && (
+        dataLoading && !stats ? (
+          <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-xs">
+            <AcademicLoader
+              title="Loading Governance Dashboard"
+              subtitle="Aggregating syllabus statistics, question verification status, and curriculum analytics..."
+              badge="Institutional Governance"
+            />
+          </div>
+        ) : stats ? (
         <div className="space-y-3.5 sm:space-y-4">
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
@@ -4214,6 +4235,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
             </div>
           )}
         </div>
+        ) : null
       )}
 
       {/* ====================================================================
@@ -4269,89 +4291,99 @@ function AdminPanel({ adminUser, setAdminUser }) {
             </select>
           </div>
 
-          {/* Subjects Table */}
-          <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[10px] sm:text-[11px] uppercase font-bold tracking-wider">
-                    <th className="py-2 px-3">Subject Name</th>
-                    <th className="py-2 px-2.5">Code</th>
-                    <th className="py-2 px-2.5">Program</th>
-                    <th className="py-2 px-2.5">Semester</th>
-                    <th className="py-2 px-2.5">MCQs</th>
-                    <th className="py-2 px-2.5">Books</th>
-                    <th className="py-2 px-2.5">Status</th>
-                    <th className="py-2 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredSubjects.map(sub => (
-                    <tr key={sub._id} className="hover:bg-slate-50/70 transition">
-                      <td className="py-2 px-3">
-                        <div className="font-bold text-slate-900 text-xs">{sub.name}</div>
-                        {sub.description && (
-                          <div className="text-[11px] text-slate-500 line-clamp-1 max-w-xs">{sub.description}</div>
-                        )}
-                      </td>
-                      <td className="py-2 px-2.5 font-mono text-[11px] font-semibold text-slate-700">
-                        {sub.code || '—'}
-                      </td>
-                      <td className="py-2 px-2.5 text-xs font-medium text-slate-700">
-                        {sub.programOrClass || 'General'}
-                      </td>
-                      <td className="py-2 px-2.5 text-xs text-slate-600">
-                        {sub.semester || '—'}
-                      </td>
-                      <td className="py-2 px-2.5 font-bold text-slate-900">
-                        {sub.questionCount || 0}
-                      </td>
-                      <td className="py-2 px-2.5 text-xs text-slate-600">
-                        {sub.bookCount || 0}
-                      </td>
-                      <td className="py-2 px-2.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
-                          sub.status === 'published'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : sub.status === 'draft'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-slate-100 text-slate-600 border border-slate-200'
-                        }`}>
-                          {sub.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenEditSubject(sub)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-700 hover:bg-slate-100 hover:text-brand-navy transition shadow-2xs"
-                            title="Update Subject details"
-                          >
-                            <Edit className="w-3 h-3" />
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            onClick={() => setSubjectToDelete(sub)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                            title={`Delete subject "${sub.name}"`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredSubjects.length === 0 && (
-                    <tr>
-                      <td colSpan="8" className="py-6 text-center text-slate-500 text-xs">
-                        No subjects match your filter criteria.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          {/* Subjects Table / Loader */}
+          {dataLoading && subjects.length === 0 ? (
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xs">
+              <AcademicLoader
+                title="Loading Academic Subjects Catalog"
+                subtitle="Retrieving curriculum configurations, course codes, and module assignments..."
+                badge="Curriculum Governance"
+              />
             </div>
-          </div>
+          ) : (
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[10px] sm:text-[11px] uppercase font-bold tracking-wider">
+                      <th className="py-2 px-3">Subject Name</th>
+                      <th className="py-2 px-2.5">Code</th>
+                      <th className="py-2 px-2.5">Program</th>
+                      <th className="py-2 px-2.5">Semester</th>
+                      <th className="py-2 px-2.5">MCQs</th>
+                      <th className="py-2 px-2.5">Books</th>
+                      <th className="py-2 px-2.5">Status</th>
+                      <th className="py-2 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSubjects.map(sub => (
+                      <tr key={sub._id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-2 px-3">
+                          <div className="font-bold text-slate-900 text-xs">{sub.name}</div>
+                          {sub.description && (
+                            <div className="text-[11px] text-slate-500 line-clamp-1 max-w-xs">{sub.description}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono text-[11px] font-semibold text-slate-700">
+                          {sub.code || '—'}
+                        </td>
+                        <td className="py-2 px-2.5 text-xs font-medium text-slate-700">
+                          {sub.programOrClass || 'General'}
+                        </td>
+                        <td className="py-2 px-2.5 text-xs text-slate-600">
+                          {sub.semester || '—'}
+                        </td>
+                        <td className="py-2 px-2.5 font-bold text-slate-900">
+                          {sub.questionCount || 0}
+                        </td>
+                        <td className="py-2 px-2.5 text-xs text-slate-600">
+                          {sub.bookCount || 0}
+                        </td>
+                        <td className="py-2 px-2.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                            sub.status === 'published'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : sub.status === 'draft'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                            {sub.status}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleOpenEditSubject(sub)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-700 hover:bg-slate-100 hover:text-brand-navy transition shadow-2xs"
+                              title="Update Subject details"
+                            >
+                              <Edit className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => setSubjectToDelete(sub)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                              title={`Delete subject "${sub.name}"`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredSubjects.length === 0 && (
+                      <tr>
+                        <td colSpan="8" className="py-6 text-center text-slate-500 text-xs">
+                          No subjects match your filter criteria.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -4393,6 +4425,16 @@ function AdminPanel({ adminUser, setAdminUser }) {
               </div>
             </div>
           </div>
+
+          {loading && (
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xs">
+              <AcademicLoader
+                title="Validating & Processing MCQs"
+                subtitle="Checking JSON schema, question taxonomy, and verifying duplicate fingerprints against database..."
+                badge="Data Ingestion Engine"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-3.5">
             {/* Left Column: Target Configuration & Input */}
@@ -4737,65 +4779,75 @@ function AdminPanel({ adminUser, setAdminUser }) {
           </div>
 
           {/* Questions Cards */}
-          <div className="space-y-2.5">
-            {questions.map((q, idx) => (
-              <div key={q._id} className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold bg-brand-navy/10 text-brand-navy">
-                      {q.subjectId?.name || 'Subject'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold capitalize bg-slate-100 text-slate-700">
-                      {q.difficulty}
-                    </span>
-                    {q.chapter && <span className="text-[11px] text-slate-500 font-medium">{q.chapter}</span>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleDeleteQuestion(q._id)}
-                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                      title="Delete Question"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <p className="font-semibold text-slate-900 text-xs sm:text-sm leading-snug">{q.question}</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-                  {q.options?.map((opt, optIdx) => (
-                    <div
-                      key={optIdx}
-                      className={`p-2 rounded-lg border text-xs ${
-                        optIdx === q.correctAnswer
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold'
-                          : 'border-slate-200 bg-slate-50/70 text-slate-700'
-                      }`}
-                    >
-                      <span className="inline-block w-4 font-bold">{String.fromCharCode(65 + optIdx)}.</span>
-                      <span>{opt}</span>
+          {questionsLoading ? (
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xs">
+              <AcademicLoader
+                title="Loading Question Repository"
+                subtitle="Retrieving verified MCQs, chapter references, taxonomy keys, and difficulty ratings..."
+                badge="Question Bank Repository"
+              />
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {questions.map((q, idx) => (
+                <div key={q._id} className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold bg-brand-navy/10 text-brand-navy">
+                        {q.subjectId?.name || 'Subject'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold capitalize bg-slate-100 text-slate-700">
+                        {q.difficulty}
+                      </span>
+                      {q.chapter && <span className="text-[11px] text-slate-500 font-medium">{q.chapter}</span>}
                     </div>
-                  ))}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleDeleteQuestion(q._id)}
+                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                        title="Delete Question"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="font-semibold text-slate-900 text-xs sm:text-sm leading-snug">{q.question}</p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                    {q.options?.map((opt, optIdx) => (
+                      <div
+                        key={optIdx}
+                        className={`p-2 rounded-lg border text-xs ${
+                          optIdx === q.correctAnswer
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold'
+                            : 'border-slate-200 bg-slate-50/70 text-slate-700'
+                        }`}
+                      >
+                        <span className="inline-block w-4 font-bold">{String.fromCharCode(65 + optIdx)}.</span>
+                        <span>{opt}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {q.explanation && (
+                    <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <strong>Explanation:</strong> {q.explanation}
+                    </p>
+                  )}
                 </div>
+              ))}
 
-                {q.explanation && (
-                  <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <strong>Explanation:</strong> {q.explanation}
-                  </p>
-                )}
-              </div>
-            ))}
-
-            {questions.length === 0 && (
-              <div className="p-8 text-center bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl">
-                <p className="text-slate-500 text-xs font-medium">No questions found matching criteria.</p>
-              </div>
-            )}
-          </div>
+              {questions.length === 0 && (
+                <div className="p-8 text-center bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl">
+                  <p className="text-slate-500 text-xs font-medium">No questions found matching criteria.</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Pagination */}
-          {questionPagination.pages > 1 && (
+          {!questionsLoading && questionPagination.pages > 1 && (
             <div className="flex items-center justify-between text-xs font-semibold pt-1">
               <span className="text-slate-500 text-[11px]">
                 Page {questionPagination.page} of {questionPagination.pages} ({questionPagination.total} MCQs)
@@ -4833,40 +4885,56 @@ function AdminPanel({ adminUser, setAdminUser }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
-            {books.map(b => (
-              <div key={b._id} className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
-                <div>
-                  <div className="flex items-center justify-between text-xs font-bold text-brand-navy mb-1.5">
-                    <span>{b.subjectId?.name || 'Subject'}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px]">
-                      {b.questionCount || 0} MCQs
-                    </span>
+          {dataLoading && books.length === 0 ? (
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xs">
+              <AcademicLoader
+                title="Loading Academic Reference Books"
+                subtitle="Fetching course textbooks, editions, and syllabus chapters..."
+                badge="Textbook & Syllabi Index"
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
+              {books.map(b => (
+                <div key={b._id} className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between space-y-2">
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-bold text-brand-navy mb-1.5">
+                      <span>{b.subjectId?.name || 'Subject'}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px]">
+                        {b.questionCount || 0} MCQs
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-slate-900 text-sm sm:text-base">{b.title}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Author: {b.author || 'Academic Faculty'} • {b.edition || 'Standard Edition'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Program: {b.programOrClass || 'General'} {b.semester}
+                    </p>
                   </div>
-                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">{b.title}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Author: {b.author || 'Academic Faculty'} • {b.edition || 'Standard Edition'}
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Program: {b.programOrClass || 'General'} {b.semester}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t text-[11px] text-slate-400">
-                  <span>Version {b.contentVersion || 1}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="capitalize font-semibold text-emerald-700">{b.status}</span>
-                    <button
-                      onClick={() => handleDeleteBook(b)}
-                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                      title={`Delete book "${b.title}"`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                  <div className="flex items-center justify-between pt-2 border-t text-[11px] text-slate-400">
+                    <span>Version {b.contentVersion || 1}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="capitalize font-semibold text-emerald-700">{b.status}</span>
+                      <button
+                        onClick={() => handleDeleteBook(b)}
+                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                        title={`Delete book "${b.title}"`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+
+              {books.length === 0 && (
+                <div className="col-span-full p-8 text-center bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl">
+                  <p className="text-slate-500 text-xs font-medium">No reference books registered yet.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
