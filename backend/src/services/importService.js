@@ -1,0 +1,165 @@
+import { parse } from 'csv-parse/sync';
+import mammoth from 'mammoth';
+import Subject from '../models/Subject.js';
+
+export function normalizeQuestionRecord(raw, index = 0) {
+  if (!raw || typeof raw !== 'object') {
+    return { valid: false, errors: [`Row ${index + 1}: Invalid question object.`], data: null };
+  }
+
+  const questionText = String(raw.question || raw.text || raw.q || raw.title || '').trim();
+
+  // Extract options from various formats
+  let options = raw.options;
+  if (!options) {
+    if (raw.optionA || raw.optionB || raw.optionC || raw.optionD) {
+      options = [raw.optionA, raw.optionB, raw.optionC, raw.optionD].filter(v => v !== undefined && v !== null);
+    } else if (raw.opt1 || raw.opt2 || raw.opt3 || raw.opt4) {
+      options = [raw.opt1, raw.opt2, raw.opt3, raw.opt4].filter(v => v !== undefined && v !== null);
+    } else if (raw.choices && Array.isArray(raw.choices)) {
+      options = raw.choices;
+    }
+  } else if (typeof options === 'object' && !Array.isArray(options)) {
+    // e.g. { "A": "Apple", "B": "Banana", "C": "Cherry", "D": "Date" }
+    options = Object.values(options).filter(v => v !== undefined && v !== null);
+  }
+
+  if (typeof options === 'string') {
+    options = options.split('|').map(s => s.trim()).filter(Boolean);
+  }
+
+  // Normalize array elements to string
+  if (Array.isArray(options)) {
+    options = options.map(o => (typeof o === 'object' && o !== null ? (o.text || o.value || JSON.stringify(o)) : String(o).trim()));
+  }
+
+  // Extract correct answer
+  let correctAnswer = raw.correctAnswer ?? raw.answer ?? raw.correctIndex ?? raw.correctOpt ?? raw.correct;
+  if (typeof correctAnswer === 'string') {
+    const trimmed = correctAnswer.trim();
+    if (/^[A-D]$/i.test(trimmed)) {
+      correctAnswer = trimmed.toUpperCase().charCodeAt(0) - 65;
+    } else if (/^[0-9]+$/.test(trimmed)) {
+      const num = Number(trimmed);
+      // If 1-based index like 1, 2, 3, 4 and options length is 4, test if 0-based or 1-based
+      if (num >= 1 && num === options?.length && options?.length > 1) {
+        correctAnswer = num - 1;
+      } else {
+        correctAnswer = num;
+      }
+    } else if (Array.isArray(options)) {
+      // Direct text matching if correctAnswer is the option string
+      const matchIdx = options.findIndex(o => o.toLowerCase() === trimmed.toLowerCase());
+      if (matchIdx !== -1) {
+        correctAnswer = matchIdx;
+      } else {
+        correctAnswer = Number(trimmed);
+      }
+    }
+  } else if (typeof correctAnswer === 'number') {
+    correctAnswer = Math.floor(correctAnswer);
+  }
+
+  const errors = [];
+  if (!questionText) errors.push(`Item ${index + 1}: Missing question text.`);
+  if (!Array.isArray(options) || options.length < 2) errors.push(`Item ${index + 1}: At least 2 options required.`);
+  if (Number.isNaN(correctAnswer) || correctAnswer < 0 || correctAnswer >= (options?.length || 0)) {
+    errors.push(`Item ${index + 1}: Correct answer (${raw.correctAnswer ?? raw.answer}) is invalid or out of bounds.`);
+  }
+
+  const isUrdu = /[\u0600-\u06FF]/.test(questionText);
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    data: {
+      question: questionText,
+      options: (options || []).map(o => String(o).trim()),
+      correctAnswer: Number.isNaN(correctAnswer) ? 0 : correctAnswer,
+      explanation: String(raw.explanation || raw.desc || '').trim(),
+      chapter: String(raw.chapter || '').trim(),
+      week: String(raw.week || '').trim(),
+      topic: String(raw.topic || '').trim(),
+      difficulty: ['easy', 'medium', 'hard'].includes(String(raw.difficulty).toLowerCase())
+        ? String(raw.difficulty).toLowerCase()
+        : 'medium',
+      language: raw.language || (isUrdu ? 'ur' : 'en')
+    }
+  };
+}
+
+export function parseRawTextBlocks(text) {
+  const blocks = text.split(/\n(?=(?:Q\d*[:.]|\d+[.)])\s+)/i).map(b => b.trim()).filter(Boolean);
+  const extracted = [];
+  for (const block of blocks) {
+    const qMatch = block.match(/^(?:Q\d*[:.]|\d+[.)])\s*(.+?)(?=\n\s*[A-D][).])/is);
+    const optMatches = [...block.matchAll(/^[ \t]*([A-D])[).]\s*(.+)$/gim)];
+    const ansMatch = block.match(/Answer\s*[:=-]\s*([A-D0-3])/i);
+    const expMatch = block.match(/Explanation\s*[:=-]\s*(.+)$/is);
+    if (qMatch && optMatches.length >= 2 && ansMatch) {
+      extracted.push({
+        question: qMatch[1].trim(),
+        options: optMatches.map(m => m[2].trim()),
+        correctAnswer: ansMatch[1].trim(),
+        explanation: expMatch ? expMatch[1].trim() : ''
+      });
+    }
+  }
+  return extracted;
+}
+
+export function parseJsonContent(content) {
+  const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+  let rawQuestions = [];
+  let metadata = {};
+
+  if (Array.isArray(parsed)) {
+    rawQuestions = parsed;
+  } else if (typeof parsed === 'object' && parsed !== null) {
+    rawQuestions = parsed.questions || parsed.mcqs || parsed.data || parsed.items || [];
+    metadata = {
+      subject: parsed.subject || parsed.subjectName || parsed.course || null,
+      book: parsed.book || parsed.bookTitle || null,
+      programOrClass: parsed.programOrClass || parsed.program || null,
+      semester: parsed.semester || null
+    };
+  }
+  return { rawQuestions, metadata, requiresDraftReview: false };
+}
+
+export async function parseUploadedFile(fileBuffer, mimeType, originalName) {
+  const ext = originalName.split('.').pop().toLowerCase();
+  if (ext === 'json' || mimeType === 'application/json') {
+    return parseJsonContent(fileBuffer.toString('utf-8'));
+  }
+  if (ext === 'csv' || mimeType === 'text/csv') {
+    const records = parse(fileBuffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
+    return { rawQuestions: records, metadata: {}, requiresDraftReview: false };
+  }
+  if (ext === 'docx') {
+    const { value } = await mammoth.extractRawText({ buffer: fileBuffer });
+    return { rawQuestions: parseRawTextBlocks(value), metadata: {}, requiresDraftReview: true };
+  }
+  throw new Error(`Unsupported format (.${ext}). Upload .json, .csv, or .docx`);
+}
+
+export async function resolveSubjectMatch(subjectName, programOrClass) {
+  if (!subjectName) return { status: 'missing' };
+  const normalizedSlug = subjectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  const exactMatch = await Subject.findOne({
+    $or: [{ slug: normalizedSlug }, { name: new RegExp(`^${subjectName.trim()}$`, 'i') }]
+  });
+
+  if (exactMatch) {
+    if (programOrClass && exactMatch.programOrClass && exactMatch.programOrClass.toLowerCase() !== programOrClass.toLowerCase()) {
+      return {
+        status: 'ambiguous_program',
+        message: `Subject "${exactMatch.name}" already exists under "${exactMatch.programOrClass}". Reuse it or create a separate subject for "${programOrClass}"?`,
+        candidate: exactMatch
+      };
+    }
+    return { status: 'exact_match', subject: exactMatch };
+  }
+  return { status: 'new_subject' };
+}
