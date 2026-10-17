@@ -125,7 +125,7 @@ function TopProgressBar() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try { window.scrollTo(0, 0); } catch (_) {}
     setVisible(true);
     setProgress(25);
 
@@ -4910,10 +4910,12 @@ export default function App() {
 
   // Detect standalone mode and listen for PWA install prompt in Chrome
   useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (isStandalone) {
-      setIsInstalled(true);
-    }
+    try {
+      const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone === true;
+      if (isStandalone) {
+        setIsInstalled(true);
+      }
+    } catch (_) {}
 
     const onBeforeInstallPrompt = (e) => {
       e.preventDefault();
