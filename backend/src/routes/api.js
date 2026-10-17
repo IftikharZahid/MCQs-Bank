@@ -15,37 +15,57 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 // 1. Preserved Legacy & Student Routes
 router.get('/status', async (req, res) => {
-  const [subjects, books, questions, exams, draftQuestions] = await Promise.all([
-    Subject.countDocuments({ status: 'published' }),
-    Book.countDocuments({ status: 'published' }),
-    Question.countDocuments({ status: 'published' }),
-    ExamAttempt.countDocuments({ status: 'submitted' }),
-    Question.countDocuments({ status: 'draft' })
-  ]);
-  res.json({
-    status: 'online',
-    database: 'connected',
-    timestamp: new Date().toISOString(),
-    stats: { subjects, books, questions, exams, draftQuestions }
-  });
+  try {
+    const isDbConnected = req.app.get('mongooseReady') || (await import('mongoose')).default.connection.readyState === 1;
+    let stats = { subjects: 0, books: 0, questions: 0, exams: 0, draftQuestions: 0 };
+    if (isDbConnected) {
+      const [subjects, books, questions, exams, draftQuestions] = await Promise.all([
+        Subject.countDocuments({ status: 'published' }).catch(() => 0),
+        Book.countDocuments({ status: 'published' }).catch(() => 0),
+        Question.countDocuments({ status: 'published' }).catch(() => 0),
+        ExamAttempt.countDocuments({ status: 'submitted' }).catch(() => 0),
+        Question.countDocuments({ status: 'draft' }).catch(() => 0)
+      ]);
+      stats = { subjects, books, questions, exams, draftQuestions };
+    }
+    res.json({
+      status: 'online',
+      database: isDbConnected ? 'connected' : 'connecting',
+      timestamp: new Date().toISOString(),
+      stats
+    });
+  } catch (err) {
+    res.json({
+      status: 'online',
+      database: 'connecting',
+      timestamp: new Date().toISOString(),
+      stats: { subjects: 0, books: 0, questions: 0, exams: 0, draftQuestions: 0 },
+      error: err.message
+    });
+  }
 });
 
 router.get('/subjects', async (req, res) => {
-  const { search, program, language } = req.query;
-  const filter = { status: 'published' };
-  if (program) filter.programOrClass = program;
-  if (language) filter.language = language;
-  if (search) filter.name = { $regex: search, $options: 'i' };
+  try {
+    const { search, program, language } = req.query;
+    const filter = { status: 'published' };
+    if (program) filter.programOrClass = program;
+    if (language) filter.language = language;
+    if (search) filter.name = { $regex: search, $options: 'i' };
 
-  const subjects = await Subject.find(filter).sort({ updatedAt: -1 }).lean();
-  const enriched = await Promise.all(subjects.map(async (sub) => {
-    const [questionCount, bookCount] = await Promise.all([
-      Question.countDocuments({ subjectId: sub._id, status: 'published' }),
-      Book.countDocuments({ subjectId: sub._id, status: 'published' })
-    ]);
-    return { ...sub, questionCount, bookCount };
-  }));
-  res.json({ success: true, data: enriched });
+    const subjects = await Subject.find(filter).sort({ updatedAt: -1 }).lean();
+    const enriched = await Promise.all(subjects.map(async (sub) => {
+      const [questionCount, bookCount] = await Promise.all([
+        Question.countDocuments({ subjectId: sub._id, status: 'published' }).catch(() => 0),
+        Book.countDocuments({ subjectId: sub._id, status: 'published' }).catch(() => 0)
+      ]);
+      return { ...sub, questionCount, bookCount };
+    }));
+    res.json({ success: true, data: enriched });
+  } catch (err) {
+    console.error('Error fetching subjects:', err.message);
+    res.status(500).json({ success: false, message: err.message, data: [] });
+  }
 });
 
 router.get('/subjects/:id', async (req, res) => {
