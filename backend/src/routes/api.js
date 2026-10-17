@@ -13,9 +13,38 @@ import { parseUploadedFile, normalizeQuestionRecord, resolveSubjectMatch } from 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
+// Lightweight High-Performance In-Memory Server Cache
+const SERVER_CACHE = {
+  status: { data: null, expiresAt: 0 },
+  subjects: { data: null, expiresAt: 0 },
+  books: { data: null, expiresAt: 0 },
+  invalidate() {
+    this.status = { data: null, expiresAt: 0 };
+    this.subjects = { data: null, expiresAt: 0 };
+    this.books = { data: null, expiresAt: 0 };
+  }
+};
+
+// Health Check Endpoint for Vercel / Uptime Monitoring
+router.get('/health', async (req, res) => {
+  const mongoose = (await import('mongoose')).default;
+  const state = mongoose.connection.readyState;
+  const stateNames = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  res.json({
+    status: state === 1 ? 'healthy' : 'degraded',
+    database: stateNames[state] || 'unknown',
+    databaseName: mongoose.connection.name || 'mcq_question_bank',
+    timestamp: new Date().toISOString(),
+    environment: process.env.VERCEL ? 'vercel-serverless' : 'node-server'
+  });
+});
+
 // 1. Preserved Legacy & Student Routes
 router.get('/status', async (req, res) => {
   try {
+    if (SERVER_CACHE.status.data && Date.now() < SERVER_CACHE.status.expiresAt) {
+      return res.json(SERVER_CACHE.status.data);
+    }
     const isDbConnected = req.app.get('mongooseReady') || (await import('mongoose')).default.connection.readyState === 1;
     let stats = { subjects: 0, books: 0, questions: 0, exams: 0, draftQuestions: 0 };
     if (isDbConnected) {
@@ -28,12 +57,14 @@ router.get('/status', async (req, res) => {
       ]);
       stats = { subjects, books, questions, exams, draftQuestions };
     }
-    res.json({
+    const payload = {
       status: 'online',
       database: isDbConnected ? 'connected' : 'connecting',
       timestamp: new Date().toISOString(),
       stats
-    });
+    };
+    SERVER_CACHE.status = { data: payload, expiresAt: Date.now() + 15000 };
+    res.json(payload);
   } catch (err) {
     res.json({
       status: 'online',
@@ -48,20 +79,42 @@ router.get('/status', async (req, res) => {
 router.get('/subjects', async (req, res) => {
   try {
     const { search, program, language } = req.query;
+    const isDefaultQuery = !search && !program && !language;
+    if (isDefaultQuery && SERVER_CACHE.subjects.data && Date.now() < SERVER_CACHE.subjects.expiresAt) {
+      return res.json(SERVER_CACHE.subjects.data);
+    }
+
     const filter = { status: 'published' };
     if (program) filter.programOrClass = program;
     if (language) filter.language = language;
     if (search) filter.name = { $regex: search, $options: 'i' };
 
-    const subjects = await Subject.find(filter).sort({ updatedAt: -1 }).lean();
-    const enriched = await Promise.all(subjects.map(async (sub) => {
-      const [questionCount, bookCount] = await Promise.all([
-        Question.countDocuments({ subjectId: sub._id, status: 'published' }).catch(() => 0),
-        Book.countDocuments({ subjectId: sub._id, status: 'published' }).catch(() => 0)
-      ]);
-      return { ...sub, questionCount, bookCount };
+    const [subjects, qCounts, bCounts] = await Promise.all([
+      Subject.find(filter).sort({ updatedAt: -1 }).lean(),
+      Question.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$subjectId', count: { $sum: 1 } } }
+      ]).catch(() => []),
+      Book.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$subjectId', count: { $sum: 1 } } }
+      ]).catch(() => [])
+    ]);
+
+    const qCountMap = new Map(qCounts.map(item => [String(item._id), item.count]));
+    const bCountMap = new Map(bCounts.map(item => [String(item._id), item.count]));
+
+    const enriched = subjects.map(sub => ({
+      ...sub,
+      questionCount: qCountMap.get(String(sub._id)) || 0,
+      bookCount: bCountMap.get(String(sub._id)) || 0
     }));
-    res.json({ success: true, data: enriched });
+
+    const response = { success: true, data: enriched };
+    if (isDefaultQuery) {
+      SERVER_CACHE.subjects = { data: response, expiresAt: Date.now() + 30000 };
+    }
+    res.json(response);
   } catch (err) {
     console.error('Error fetching subjects:', err.message);
     res.status(500).json({ success: false, message: err.message, data: [] });
@@ -71,23 +124,43 @@ router.get('/subjects', async (req, res) => {
 router.get('/subjects/:id', async (req, res) => {
   const subject = await Subject.findById(req.params.id).lean();
   if (!subject) return res.status(404).json({ success: false, message: 'Subject not found' });
-  const books = await Book.find({ subjectId: subject._id, status: 'published' }).lean();
-  const questionCount = await Question.countDocuments({ subjectId: subject._id, status: 'published' });
+  const [books, questionCount] = await Promise.all([
+    Book.find({ subjectId: subject._id, status: 'published' }).lean(),
+    Question.countDocuments({ subjectId: subject._id, status: 'published' }).catch(() => 0)
+  ]);
   res.json({ success: true, data: { ...subject, books, questionCount } });
 });
 
 router.get('/books', async (req, res) => {
   const { subjectId, search } = req.query;
+  const isDefaultQuery = !subjectId && !search;
+  if (isDefaultQuery && SERVER_CACHE.books.data && Date.now() < SERVER_CACHE.books.expiresAt) {
+    return res.json(SERVER_CACHE.books.data);
+  }
+
   const filter = { status: 'published' };
   if (subjectId) filter.subjectId = subjectId;
   if (search) filter.title = { $regex: search, $options: 'i' };
 
-  const books = await Book.find(filter).populate('subjectId', 'name slug programOrClass').sort({ createdAt: -1 }).lean();
-  const enriched = await Promise.all(books.map(async (b) => {
-    const questionCount = await Question.countDocuments({ bookId: b._id, status: 'published' });
-    return { ...b, questionCount };
+  const [books, qCounts] = await Promise.all([
+    Book.find(filter).populate('subjectId', 'name slug programOrClass').sort({ createdAt: -1 }).lean(),
+    Question.aggregate([
+      { $match: { status: 'published' } },
+      { $group: { _id: '$bookId', count: { $sum: 1 } } }
+    ]).catch(() => [])
+  ]);
+
+  const qCountMap = new Map(qCounts.map(item => [String(item._id), item.count]));
+  const enriched = books.map(b => ({
+    ...b,
+    questionCount: qCountMap.get(String(b._id)) || 0
   }));
-  res.json({ success: true, data: enriched });
+
+  const response = { success: true, data: enriched };
+  if (isDefaultQuery) {
+    SERVER_CACHE.books = { data: response, expiresAt: Date.now() + 30000 };
+  }
+  res.json(response);
 });
 
 router.get('/questions', async (req, res) => {
@@ -119,7 +192,17 @@ router.get('/questions', async (req, res) => {
 
 // 2. Examination & Authoritative Grading Routes
 router.post('/exams/start', async (req, res) => {
-  const { subjectId, bookId, questionCount = 10, durationMinutes = 15, passingPercentage = 50, studentName } = req.body;
+  const {
+    subjectId,
+    bookId,
+    questionCount = 10,
+    durationMinutes = 15,
+    passingPercentage = 50,
+    studentName,
+    studentClass,
+    studentRollNo,
+    studentInstitution
+  } = req.body;
   const matchStage = { status: 'published' };
   if (subjectId) matchStage.subjectId = new Subject.base.Types.ObjectId(subjectId);
   if (bookId) matchStage.bookId = new Book.base.Types.ObjectId(bookId);
@@ -139,6 +222,9 @@ router.post('/exams/start', async (req, res) => {
     subjectId: sampledQuestions[0].subjectId,
     bookId: bookId || null,
     studentName: studentName || 'Candidate',
+    studentClass: studentClass || '',
+    studentRollNo: studentRollNo || '',
+    studentInstitution: studentInstitution || '',
     durationMinutes: Number(durationMinutes),
     passingPercentage: Number(passingPercentage),
     items: sampledQuestions.map(q => ({ questionId: q._id, selectedOption: null, isCorrect: false }))
@@ -330,6 +416,7 @@ router.post('/admin/subjects', requireAuth, async (req, res) => {
     language: language || 'en',
     status: status || 'published'
   });
+  SERVER_CACHE.invalidate();
   res.status(201).json({ success: true, data: created });
 });
 
@@ -361,6 +448,7 @@ router.put('/admin/subjects/:id', requireAuth, async (req, res) => {
 
     subject.contentVersion = (subject.contentVersion || 1) + 1;
     await subject.save();
+    SERVER_CACHE.invalidate();
 
     res.json({ success: true, message: 'Subject updated successfully', data: subject });
   } catch (err) {
@@ -397,6 +485,7 @@ router.delete('/admin/subjects/:id', requireAuth, async (req, res) => {
       Book.deleteMany({ subjectId: id }),
       Subject.findByIdAndDelete(id)
     ]);
+    SERVER_CACHE.invalidate();
 
     res.json({
       success: true,
@@ -440,6 +529,7 @@ router.post('/admin/books', requireAuth, async (req, res) => {
     status: status || 'published',
     description: description || ''
   });
+  SERVER_CACHE.invalidate();
   res.status(201).json({ success: true, data: book });
 });
 
@@ -448,6 +538,7 @@ router.put('/admin/books/:id', requireAuth, async (req, res) => {
   try {
     const book = await Book.findByIdAndUpdate(req.params.id, { $set: req.body, $inc: { contentVersion: 1 } }, { new: true });
     if (!book) return res.status(404).json({ success: false, message: 'Book not found' });
+    SERVER_CACHE.invalidate();
     res.json({ success: true, data: book });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -460,6 +551,7 @@ router.delete('/admin/books/:id', requireAuth, async (req, res) => {
     const book = await Book.findByIdAndDelete(req.params.id);
     if (!book) return res.status(404).json({ success: false, message: 'Book not found' });
     await Question.updateMany({ bookId: req.params.id }, { $unset: { bookId: 1 } });
+    SERVER_CACHE.invalidate();
     res.json({ success: true, message: `Book "${book.title}" deleted successfully.` });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -511,6 +603,7 @@ router.post('/admin/questions', requireAuth, async (req, res) => {
     bookId: req.body.bookId || undefined,
     status: req.body.status || 'published'
   });
+  SERVER_CACHE.invalidate();
   res.status(201).json({ success: true, data: created });
 });
 
@@ -531,6 +624,7 @@ router.put('/admin/questions/:id', requireAuth, async (req, res) => {
     existing.contentVersion = (existing.contentVersion || 1) + 1;
 
     await existing.save();
+    SERVER_CACHE.invalidate();
     res.json({ success: true, data: existing });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -541,6 +635,7 @@ router.put('/admin/questions/:id', requireAuth, async (req, res) => {
 router.delete('/admin/questions/:id', requireAuth, async (req, res) => {
   try {
     await Question.findByIdAndDelete(req.params.id);
+    SERVER_CACHE.invalidate();
     res.json({ success: true, message: 'Question deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -659,7 +754,7 @@ router.post('/admin/imports/json', requireAuth, async (req, res) => {
 
 // Admin Upload / Commit MCQs to Database
 router.post('/upload', requireAuth, async (req, res) => {
-  const { subjectId, createNewSubject, bookTitle, questions = [], publishImmediately = true } = req.body;
+  const { subjectId, createNewSubject, bookTitle, questions = [], publishImmediately = true, randomizeOptions = true } = req.body;
   let targetSubjectId = subjectId;
 
   if (!targetSubjectId && createNewSubject?.name) {
@@ -691,7 +786,7 @@ router.post('/upload', requireAuth, async (req, res) => {
   let insertedCount = 0;
   let skippedDuplicates = 0;
   for (const rawQ of questions) {
-    const norm = normalizeQuestionRecord(rawQ, 0);
+    const norm = normalizeQuestionRecord(rawQ, 0, { randomize: Boolean(randomizeOptions) });
     if (!norm.valid) continue;
     try {
       await Question.create({
@@ -705,6 +800,8 @@ router.post('/upload', requireAuth, async (req, res) => {
       if (err.code === 11000) skippedDuplicates++;
     }
   }
+
+  SERVER_CACHE.invalidate();
 
   res.status(201).json({
     success: true,

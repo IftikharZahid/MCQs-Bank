@@ -2,7 +2,27 @@ import { parse } from 'csv-parse/sync';
 import mammoth from 'mammoth';
 import Subject from '../models/Subject.js';
 
-export function normalizeQuestionRecord(raw, index = 0) {
+export function shuffleQuestionOptions(options, correctAnswer) {
+  if (!Array.isArray(options) || options.length <= 1) {
+    return { options, correctAnswer };
+  }
+  const indexed = options.map((opt, i) => ({ opt, isCorrect: i === correctAnswer }));
+  const lastOpt = String(options[options.length - 1]).trim();
+  const keepLast = /all of the above|none of the above/i.test(lastOpt);
+
+  const toShuffle = keepLast ? indexed.slice(0, -1) : [...indexed];
+  for (let i = toShuffle.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [toShuffle[i], toShuffle[j]] = [toShuffle[j], toShuffle[i]];
+  }
+  const result = keepLast ? [...toShuffle, indexed[indexed.length - 1]] : toShuffle;
+  return {
+    options: result.map(o => o.opt),
+    correctAnswer: result.findIndex(o => o.isCorrect)
+  };
+}
+
+export function normalizeQuestionRecord(raw, index = 0, { randomize = false } = {}) {
   if (!raw || typeof raw !== 'object') {
     return { valid: false, errors: [`Row ${index + 1}: Invalid question object.`], data: null };
   }
@@ -67,6 +87,16 @@ export function normalizeQuestionRecord(raw, index = 0) {
     errors.push(`Item ${index + 1}: Correct answer (${raw.correctAnswer ?? raw.answer}) is invalid or out of bounds.`);
   }
 
+  let finalOptions = (options || []).map(o => String(o).trim());
+  let finalCorrectAnswer = Number.isNaN(correctAnswer) ? 0 : correctAnswer;
+
+  // Automatically randomize option positions if enabled
+  if (errors.length === 0 && randomize && finalOptions.length > 1) {
+    const shuffled = shuffleQuestionOptions(finalOptions, finalCorrectAnswer);
+    finalOptions = shuffled.options;
+    finalCorrectAnswer = shuffled.correctAnswer;
+  }
+
   const isUrdu = /[\u0600-\u06FF]/.test(questionText);
 
   return {
@@ -74,8 +104,8 @@ export function normalizeQuestionRecord(raw, index = 0) {
     errors,
     data: {
       question: questionText,
-      options: (options || []).map(o => String(o).trim()),
-      correctAnswer: Number.isNaN(correctAnswer) ? 0 : correctAnswer,
+      options: finalOptions,
+      correctAnswer: finalCorrectAnswer,
       explanation: String(raw.explanation || raw.desc || '').trim(),
       chapter: String(raw.chapter || '').trim(),
       week: String(raw.week || '').trim(),
