@@ -10,7 +10,7 @@
     "seed:admin": "cd backend && npm run seed:admin",
     "audit:db": "cd backend && npm run audit:db",
     "migrate:legacy": "cd backend && npm run migrate:legacy",
-    "build": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm install && npm run build && node --input-type=module -e \"import fs from 'node:fs'; fs.cpSync('../dist', 'dist', {recursive: true, force: true});\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
