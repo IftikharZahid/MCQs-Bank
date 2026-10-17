@@ -18,19 +18,66 @@ try {
 
 const app = express();
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.CLIENT_ORIGIN
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '15mb' }));
 app.use(cookieParser());
+
+// Database connection helper with connection reuse for serverless / fluid compute
+let isConnecting = false;
+async function connectDB() {
+  if (mongoose.connection.readyState >= 1) return;
+  if (isConnecting) return;
+  isConnecting = true;
+  try {
+    if (process.env.MONGODB_URI) {
+      await mongoose.connect(process.env.MONGODB_URI);
+      console.log('Connected to MongoDB');
+    } else {
+      console.warn('MONGODB_URI is not defined in environment variables.');
+    }
+  } catch (err) {
+    console.error('MongoDB connection error:', err.message);
+  } finally {
+    isConnecting = false;
+  }
+}
+
+// Ensure DB is connected before handling requests
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState === 0 && process.env.MONGODB_URI) {
+    await connectDB();
+  }
+  next();
+});
 
 app.use('/api', apiRoutes);
 
 const PORT = process.env.PORT || 5000;
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true' || Boolean(process.env.VERCEL_ENV);
+
+if (!isVercel) {
+  connectDB().then(() => {
     app.listen(PORT, () => console.log(`Question Bank API Server running on http://localhost:${PORT}`));
-  })
-  .catch(err => {
-    console.error('MongoDB connection error:', err.message);
-    process.exit(1);
   });
+} else {
+  // In Vercel environment, initiate connection eagerly on cold start
+  connectDB().catch(err => console.error('Cold-start DB connection error:', err.message));
+}
+
+export default app;
