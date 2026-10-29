@@ -1,5 +1,54 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Routes, Route, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { store } from './store/index.js';
+import {
+  fetchCatalogData,
+  selectAllSubjects,
+  selectAllBooks,
+  selectCatalogStatus,
+  selectCatalogLoading,
+  selectDbConnected,
+  selectCatalogError,
+  catalogUpdated
+} from './store/slices/catalogSlice.js';
+import {
+  startExamThunk,
+  submitExamThunk,
+  setExamOption,
+  skipExamQuestion,
+  setCurrentIndex,
+  nextExamQuestion,
+  prevExamQuestion,
+  tickTimer,
+  resetExam,
+  selectActiveExamSession,
+  selectExamAnswers,
+  selectCurrentExamIndex,
+  selectSkippedIds,
+  selectExamSecondsLeft,
+  selectExamTranscript,
+  selectIsExamActive,
+  selectExamStatus,
+  selectExamError
+} from './store/slices/examSlice.js';
+import {
+  saveStudentUser,
+  logoutStudent,
+  recordQuestionSolved,
+  recordExamAttempt,
+  recordRecentActivity,
+  selectStudentUser,
+  selectStudentProgress
+} from './store/slices/studentSlice.js';
+import {
+  setAppModalOpen,
+  setStudentModalOpen,
+  setIsInstalled,
+  selectIsAppModalOpen,
+  selectIsStudentModalOpen,
+  selectIsInstalled
+} from './store/slices/uiSlice.js';
 import {
   BookOpen, GraduationCap, LayoutDashboard, UploadCloud, CheckCircle2,
   Clock, Printer, ShieldCheck, Search, Play, Award, PlusCircle, LogOut,
@@ -289,6 +338,7 @@ export function invalidateClientCache() {
   API_CACHE.books = null;
   API_CACHE.questions = {};
   try {
+    store.dispatch(fetchCatalogData({ force: true }));
     window.dispatchEvent(new CustomEvent('academic_catalog_updated'));
   } catch (_) {}
 }
@@ -416,9 +466,11 @@ function Navbar({
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
@@ -691,38 +743,44 @@ function Navbar({
 
             {/* Notification Popover Dropdown (Mobile Viewport Safe) */}
             {showNotifications && (
-              <div className="fixed inset-x-3 top-13 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-slate-900 border border-slate-700/90 rounded-2xl p-3.5 sm:p-4 shadow-2xl z-50 text-left animate-in fade-in">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-white">
-                    <Bell className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Academic Notifications</span>
+              <>
+                <div
+                  className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px]"
+                  onClick={() => setShowNotifications(false)}
+                />
+                <div className="fixed inset-x-3 top-14 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-slate-900 border border-slate-700/90 rounded-2xl p-3.5 sm:p-4 shadow-2xl z-50 text-left animate-in fade-in max-h-[85vh] overflow-y-auto">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-white">
+                      <Bell className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Academic Notifications</span>
+                    </div>
+                    <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white p-0.5 cursor-pointer">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white p-0.5">
-                    <X className="w-3.5 h-3.5" />
+                  <div className="py-2.5 space-y-2 text-xs text-slate-300">
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                      <p className="font-semibold text-white">📱 Android Companion App Ready</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Direct APK download available for offline practice on smartphones and tablets.</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                      <p className="font-semibold text-white">🎓 5 Core Subjects Verified</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Computer Architecture, DBMS, Automata, OOP and more updated with full syllabus coverage.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNotifications(false);
+                      onOpenAppModal();
+                    }}
+                    className="w-full mt-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs transition text-center flex items-center justify-center gap-1.5 shadow-sm active:scale-98 cursor-pointer"
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>Get Mobile & Chrome App</span>
                   </button>
                 </div>
-                <div className="py-2.5 space-y-2 text-xs text-slate-300">
-                  <div className="p-2 rounded-xl bg-white/5 border border-white/5">
-                    <p className="font-semibold text-white">📱 Android Companion App Ready</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Direct APK download available for offline practice on smartphones and tablets.</p>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white/5 border border-white/5">
-                    <p className="font-semibold text-white">🎓 5 Core Subjects Verified</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Computer Architecture, DBMS, Automata, OOP and more updated with full syllabus coverage.</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNotifications(false);
-                    onOpenAppModal();
-                  }}
-                  className="w-full mt-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs transition text-center flex items-center justify-center gap-1.5 shadow-sm active:scale-98"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>Get Mobile & Chrome App</span>
-                </button>
-              </div>
+              </>
             )}
           </div>
 
@@ -742,7 +800,12 @@ function Navbar({
 
               {/* Ultra-Compact Professional Profile Dropdown */}
               {showStudentMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 max-w-[calc(100vw-1.5rem)] bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-2.5 shadow-xl z-50 text-left animate-in fade-in">
+                <>
+                  <div
+                    className="fixed inset-0 z-40 bg-slate-950/30"
+                    onClick={() => setShowStudentMenu(false)}
+                  />
+                  <div className="fixed inset-x-4 top-14 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-56 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-2.5 shadow-xl z-50 text-left animate-in fade-in">
                   {/* Compact Header */}
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
                     <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
@@ -798,7 +861,8 @@ function Navbar({
                     </button>
                   </div>
                 </div>
-              )}
+              </>
+            )}
             </div>
           ) : (
             <button
@@ -833,7 +897,7 @@ function MobileBottomNav({ onOpenAppModal }) {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] print:hidden">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] print:hidden pb-[env(safe-area-inset-bottom,0px)]">
       <div className="grid grid-cols-5 h-14 items-center">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -908,8 +972,11 @@ function StudentProfileModal({ isOpen, onClose, studentUser, onSave, onLogout })
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-sm w-full text-white shadow-2xl overflow-hidden relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/75 backdrop-blur-sm animate-fadeIn"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-sm w-full text-white shadow-2xl overflow-hidden relative max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="bg-[#0B1536] px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -1056,10 +1123,13 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
   const [activeTab, setActiveTab] = useState('chrome'); // 'chrome' | 'apk'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-sm sm:max-w-md w-full text-white shadow-2xl overflow-hidden relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-sm sm:max-w-md w-full text-white shadow-2xl overflow-hidden relative max-h-[88vh] flex flex-col">
         {/* Compact Header */}
-        <div className="bg-[#0B1536] px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+        <div className="bg-[#0B1536] px-4 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-sm">
               <GraduationCap className="w-5 h-5 text-slate-950" />
@@ -1075,30 +1145,30 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="grid grid-cols-2 bg-slate-950/80 p-1 border-b border-slate-800 text-xs">
+        <div className="grid grid-cols-2 bg-slate-950/80 p-1 border-b border-slate-800 text-xs shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('chrome')}
-            className={`py-2 px-3 rounded-lg font-bold transition flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-3 rounded-lg font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'chrome'
                 ? 'bg-amber-400 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Chrome className="w-3.5 h-3.5" />
-            <span>Chrome / Desktop</span>
+            <span>Web App / PWA</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('apk')}
-            className={`py-2 px-3 rounded-lg font-bold transition flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-3 rounded-lg font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'apk'
                 ? 'bg-amber-400 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -1110,16 +1180,16 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 space-y-3">
+        <div className="p-4 space-y-3 overflow-y-auto flex-1">
           {activeTab === 'chrome' ? (
             <>
               <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 space-y-1">
                 <p className="font-semibold text-white flex items-center gap-1.5">
                   <span className="text-amber-400">⚡</span>
-                  <span>Instant Chrome Web App (0 MB Storage)</span>
+                  <span>Instant Mobile & Desktop Web App</span>
                 </p>
                 <p className="text-[11px] text-slate-400 leading-snug">
-                  Installs in Chrome, Edge & Android in seconds. Runs in its own clean window with a desktop shortcut!
+                  Zero download size. Launches instantly in full-screen standalone mode from your phone's Home Screen or Desktop shortcut.
                 </p>
               </div>
 
@@ -1132,16 +1202,22 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
                 <button
                   type="button"
                   onClick={onInstallChrome}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md transition active:scale-98 flex items-center justify-center gap-2"
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md transition active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Chrome className="w-4 h-4 text-slate-950" />
-                  <span>Install Chrome App & Create Shortcut</span>
+                  <span>Install Web App</span>
                 </button>
               )}
 
-              <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                Tip: If prompt doesn't open, click the <span className="text-amber-300 font-mono">⊕</span> or <span className="text-amber-300 font-mono">⊞</span> icon in Chrome's URL bar, or tap menu <span className="font-mono">⋮</span> &rarr; <strong className="text-slate-300">Install MCQs Bank</strong>.
-              </p>
+              <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/80 text-[11px] text-slate-400 space-y-1.5">
+                <p className="font-bold text-slate-300">How to install manually on mobile:</p>
+                <p className="leading-relaxed">
+                  📱 <strong className="text-slate-300">Chrome / Edge (Android):</strong> Tap menu <span className="text-amber-300 font-mono">⋮</span> &rarr; tap <strong className="text-slate-200">"Install app"</strong> or <strong className="text-slate-200">"Add to Home screen"</strong>.
+                </p>
+                <p className="leading-relaxed">
+                  🍎 <strong className="text-slate-300">Safari (iPhone/iPad):</strong> Tap the Share button <span className="text-amber-300 font-mono">⎋</span> &rarr; scroll down and tap <strong className="text-slate-200">"Add to Home Screen"</strong>.
+                </p>
+              </div>
             </>
           ) : (
             <>
@@ -1172,11 +1248,11 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
             </>
           )}
 
-          <div className="pt-1 flex justify-end">
+          <div className="pt-2 flex justify-end border-t border-slate-800/60">
             <button
               type="button"
               onClick={onClose}
-              className="text-xs text-slate-400 hover:text-white px-3 py-1 rounded-lg hover:bg-white/5 transition"
+              className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer"
             >
               Close
             </button>
@@ -1191,17 +1267,22 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
  * 1. STUDENT HOMEPAGE
  * ======================================================================== */
 function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
+  const dispatch = useDispatch();
+  const subjects = useSelector(selectAllSubjects);
+  const books = useSelector(selectAllBooks);
+  const catalogStatus = useSelector(selectCatalogStatus);
+  const dbConnected = useSelector(selectDbConnected);
+  const [dbAlertDismissed, setDbAlertDismissedLocal] = useState(false);
   const [status, setStatus] = useState(() => API_CACHE.status || { stats: { subjects: 0, books: 0, questions: 0, exams: 0 } });
-  const [subjects, setSubjects] = useState(() => API_CACHE.subjects || []);
-  const [books, setBooks] = useState(() => API_CACHE.books || []);
   const [homeExploreTab, setHomeExploreTab] = useState('books'); // 'books' or 'subjects'
   const [recentExams, setRecentExams] = useState([]);
-  const [loading, setLoading] = useState(() => !API_CACHE.subjects || !API_CACHE.books);
   const [progressData, setProgressData] = useState(() => getStudentProgressData());
   const navigate = useNavigate();
 
   const fetchHomeData = () => {
     const t = Date.now();
+    dispatch(fetchCatalogData({ force: true }));
+
     fetch(`/api/status?t=${t}`)
       .then(r => r.json())
       .then(d => {
@@ -1212,25 +1293,6 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       })
       .catch(() => {});
 
-    fetch(`/api/subjects?t=${t}`)
-      .then(r => r.json())
-      .then(d => {
-        const list = d.data || [];
-        setSubjects(list);
-        API_CACHE.subjects = list;
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-
-    fetch(`/api/books?t=${t}`)
-      .then(r => r.json())
-      .then(d => {
-        const list = d.data || [];
-        setBooks(list);
-        API_CACHE.books = list;
-      })
-      .catch(() => {});
-
     fetch(`/api/exams/recent?t=${t}`)
       .then(r => r.json())
       .then(d => setRecentExams(d.data || []))
@@ -1238,11 +1300,12 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   };
 
   useEffect(() => {
+    dispatch(fetchCatalogData());
     fetchHomeData();
 
     const handleSync = () => {
       setProgressData(getStudentProgressData());
-      fetchHomeData();
+      dispatch(fetchCatalogData({ force: true }));
     };
     window.addEventListener('academic_progress_updated', handleSync);
     window.addEventListener('academic_catalog_updated', handleSync);
@@ -1252,7 +1315,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       window.removeEventListener('academic_catalog_updated', handleSync);
       window.removeEventListener('storage', handleSync);
     };
-  }, []);
+  }, [dispatch]);
 
   const filteredSubjects = subjects;
   const totalBankQuestions = status.stats?.questions || subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) || 721;
@@ -1260,6 +1323,41 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
+      {/* Database Connection Notice if offline/unreachable */}
+      {!dbConnected && !dbAlertDismissed && (
+        <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-3 sm:p-4 text-amber-900 shadow-xs flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-200/80 text-amber-800 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-bold leading-tight">
+                Offline Cache Active • Cloud Database Synchronizing
+              </p>
+              <p className="text-[11px] text-amber-700/90 mt-0.5">
+                Previously synced books and subjects are preserved from client storage. If database is unreachable, check Atlas IP access.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => dispatch(fetchCatalogData({ force: true }))}
+              className="px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDbAlertDismissedLocal(true)}
+              className="p-1.5 text-amber-600 hover:text-amber-800 rounded-lg hover:bg-amber-100/60"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
       {/* 1. HERO CARD (Compact & Professional Academic Standards) */}
       <section className="bg-gradient-to-r from-[#0B1536] via-[#0E1B40] to-[#14265A] text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 lg:py-6 lg:px-8 shadow-lg border border-slate-800/80 relative overflow-hidden">
         {/* Subtle ambient glows */}
@@ -1952,44 +2050,20 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
  * 2. SUBJECTS & BOOKS CATALOG PAGE
  * ======================================================================== */
 function CatalogPage() {
-  const [books, setBooks] = useState(() => API_CACHE.books || []);
-  const [subjects, setSubjects] = useState(() => API_CACHE.subjects || []);
+  const dispatch = useDispatch();
+  const books = useSelector(selectAllBooks);
+  const subjects = useSelector(selectAllSubjects);
+  const loading = useSelector(selectCatalogLoading);
   const [selectedSubject, setSelectedSubject] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(() => !API_CACHE.books || !API_CACHE.subjects);
   const navigate = useNavigate();
 
-  const fetchCatalogData = (forceRefresh = false) => {
-    if (forceRefresh) {
-      setLoading(true);
-    }
-    const t = Date.now();
-    Promise.all([
-      fetch(`/api/subjects?t=${t}`).then(r => r.json()).then(d => {
-        const list = d.data || [];
-        API_CACHE.subjects = list;
-        return list;
-      }).catch(() => []),
-      fetch(`/api/books?t=${t}`).then(r => r.json()).then(d => {
-        const list = d.data || [];
-        API_CACHE.books = list;
-        return list;
-      }).catch(() => [])
-    ])
-      .then(([subList, bookList]) => {
-        setSubjects(subList);
-        setBooks(bookList);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  };
-
   useEffect(() => {
-    fetchCatalogData();
-    const handleUpdate = () => fetchCatalogData(true);
+    dispatch(fetchCatalogData());
+    const handleUpdate = () => dispatch(fetchCatalogData({ force: true }));
     window.addEventListener('academic_catalog_updated', handleUpdate);
     return () => window.removeEventListener('academic_catalog_updated', handleUpdate);
-  }, []);
+  }, [dispatch]);
 
   if (loading && books.length === 0) {
     return (
@@ -2619,12 +2693,31 @@ function PracticePage() {
  * 4. TIMED EXAMINATION & PRINTABLE A4 TRANSCRIPT
  * ======================================================================== */
 function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
-  const [subjects, setSubjects] = useState(() => API_CACHE.subjects || []);
+  const [searchParams] = useSearchParams();
+  const urlSubjectId = searchParams.get('subjectId') || '';
+  const urlBookId = searchParams.get('bookId') || '';
+
+  const dispatch = useDispatch();
+  const subjects = useSelector(selectAllSubjects);
+  const allBooks = useSelector(selectAllBooks);
+  const catalogStatus = useSelector(selectCatalogStatus);
+  const session = useSelector(selectActiveExamSession);
+  const answers = useSelector(selectExamAnswers);
+  const currentExamIndex = useSelector(selectCurrentExamIndex);
+  const skippedQuestions = useSelector(selectSkippedIds);
+  const secondsLeft = useSelector(selectExamSecondsLeft);
+  const transcript = useSelector(selectExamTranscript);
+  const examStatus = useSelector(selectExamStatus);
+  const examError = useSelector(selectExamError);
+  const isExamActive = useSelector(selectIsExamActive);
+
   const [config, setConfig] = useState({
-    subjectId: API_CACHE.subjects?.[0]?._id || '',
+    subjectId: urlSubjectId || subjects?.[0]?._id || '',
+    bookId: urlBookId || '',
     questionCount: 20,
     durationMinutes: 20
   });
+
   const [inlineAuth, setInlineAuth] = useState({
     name: '',
     className: '',
@@ -2632,16 +2725,39 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
     institution: ''
   });
   const [inlineAuthError, setInlineAuthError] = useState('');
-  const [session, setSession] = useState(null);
-  const [answers, setAnswers] = useState({});
-  const [currentExamIndex, setCurrentExamIndex] = useState(0);
-  const [skippedQuestions, setSkippedQuestions] = useState(() => new Set());
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(0);
-  const [transcript, setTranscript] = useState(null);
-  const [loading, setLoading] = useState(() => !API_CACHE.subjects);
+  const submitting = examStatus === 'submitting';
   const examNavContainerRef = useRef(null);
+
+  // Sync subjectId and bookId if URL query changes or subjects load
+  useEffect(() => {
+    if (urlSubjectId) {
+      setConfig(c => ({
+        ...c,
+        subjectId: urlSubjectId,
+        bookId: urlBookId || c.bookId
+      }));
+    } else if (!config.subjectId && subjects[0]?._id) {
+      setConfig(c => ({
+        ...c,
+        subjectId: subjects[0]._id
+      }));
+    }
+  }, [urlSubjectId, urlBookId, subjects]);
+
+  // Ensure catalog data is fetched into Redux
+  useEffect(() => {
+    dispatch(fetchCatalogData());
+  }, [dispatch]);
+
+  // Books filtered for selected subject
+  const subjectBooks = useMemo(() => {
+    if (!config.subjectId) return [];
+    return allBooks.filter(b => {
+      const bSubId = typeof b.subjectId === 'object' ? b.subjectId?._id : b.subjectId;
+      return String(bSubId) === String(config.subjectId);
+    });
+  }, [allBooks, config.subjectId]);
 
   useEffect(() => {
     if (examNavContainerRef.current) {
@@ -2652,56 +2768,31 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
     }
   }, [currentExamIndex]);
 
-  useEffect(() => {
-    fetch('/api/subjects')
-      .then(r => r.json())
-      .then(d => {
-        const list = d.data || [];
-        API_CACHE.subjects = list;
-        setSubjects(list);
-        if (list[0]) {
-          setConfig(c => (c.subjectId ? c : { ...c, subjectId: list[0]._id }));
-        }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
   const handleSubmitExam = async () => {
     if (!session || submitting) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/exams/${session.attemptId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTranscript(data.data);
-        setShowSubmitModal(false);
-
-        const chosenSub = subjects.find(s => s._id === (session.subjectId?._id || session.subjectId || config.subjectId));
-        recordExamAttemptProgress({
-          subjectId: session.subjectId?._id || session.subjectId || config.subjectId,
-          subjectName: chosenSub?.name || session.title,
-          totalQuestions: session.questions?.length,
-          score: data.data?.summary?.obtainedMarks,
-          percentage: data.data?.summary?.percentage,
-          passed: data.data?.summary?.passed,
-          questions: (session.questions || []).map(q => ({
-            questionId: q._id,
-            isCorrect: answers[q._id] === q.correctAnswer,
-            selectedOption: answers[q._id]
-          }))
-        });
-      } else {
-        alert(data.message || 'Failed to submit exam.');
-      }
-    } catch (err) {
-      alert('Connection error while submitting exam. Please try again.');
-    } finally {
-      setSubmitting(false);
+    const resultAction = await dispatch(submitExamThunk({
+      attemptId: session.attemptId,
+      answers
+    }));
+    if (submitExamThunk.fulfilled.match(resultAction)) {
+      setShowSubmitModal(false);
+      const data = resultAction.payload;
+      const chosenSub = subjects.find(s => s._id === (session.subjectId?._id || session.subjectId || config.subjectId));
+      dispatch(recordExamAttempt({
+        subjectId: session.subjectId?._id || session.subjectId || config.subjectId,
+        subjectName: chosenSub?.name || session.title,
+        totalQuestions: session.questions?.length,
+        score: data?.summary?.obtainedMarks,
+        percentage: data?.summary?.percentage,
+        passed: data?.summary?.passed,
+        questions: (session.questions || []).map(q => ({
+          questionId: q._id,
+          isCorrect: answers[q._id] === q.correctAnswer,
+          selectedOption: answers[q._id]
+        }))
+      }));
+    } else {
+      alert(resultAction.payload || 'Failed to submit exam.');
     }
   };
 
@@ -2711,11 +2802,13 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
       handleSubmitExam();
       return;
     }
-    const timer = setInterval(() => setSecondsLeft(s => s - 1), 1000);
+    const timer = setInterval(() => {
+      dispatch(tickTimer());
+    }, 1000);
     return () => clearInterval(timer);
-  }, [session, secondsLeft, transcript]);
+  }, [session, secondsLeft, transcript, dispatch]);
 
-  if (loading && !session && !transcript) {
+  if (catalogStatus === 'loading' && subjects.length === 0 && !session && !transcript) {
     return (
       <AcademicLoader
         title="Loading Examination Simulator"
@@ -2750,74 +2843,48 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
       if (onOpenStudentLogin) onOpenStudentLogin();
       return;
     }
-    const res = await fetch('/api/exams/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subjectId: config.subjectId,
-        studentName: studentUser.name,
-        studentClass: studentUser.className || '',
-        studentRollNo: studentUser.rollNo || '',
-        studentInstitution: studentUser.institution || '',
-        questionCount: config.questionCount,
-        durationMinutes: config.durationMinutes
-      })
-    });
-    const data = await res.json();
-    if (data.success) {
-      setSession(data);
-      setAnswers({});
-      setSkippedQuestions(new Set());
-      setCurrentExamIndex(0);
+    const resultAction = await dispatch(startExamThunk({
+      subjectId: config.subjectId,
+      bookId: config.bookId || undefined,
+      studentName: studentUser.name,
+      studentClass: studentUser.className || '',
+      studentRollNo: studentUser.rollNo || '',
+      studentInstitution: studentUser.institution || '',
+      questionCount: config.questionCount,
+      durationMinutes: config.durationMinutes
+    }));
+    if (startExamThunk.fulfilled.match(resultAction)) {
       setShowSubmitModal(false);
-      setSecondsLeft(data.durationMinutes * 60);
-
       const chosenSub = subjects.find(s => s._id === config.subjectId);
-      recordRecentActivitySession({
+      dispatch(recordRecentActivity({
         type: 'exam',
         subjectId: config.subjectId,
         subjectName: chosenSub?.name || 'Official Exam Simulation',
         totalQuestions: config.questionCount
-      });
+      }));
     } else {
-      alert(data.message || 'Could not start examination');
+      alert(resultAction.payload || 'Could not start examination');
     }
   };
 
   const handleSelectExamOption = (optIdx) => {
     if (!session || !session.questions[currentExamIndex]) return;
     const qId = session.questions[currentExamIndex]._id;
-    setAnswers(prev => ({ ...prev, [qId]: optIdx }));
-    setSkippedQuestions(prev => {
-      if (!prev.has(qId)) return prev;
-      const next = new Set(prev);
-      next.delete(qId);
-      return next;
-    });
+    dispatch(setExamOption({ questionId: qId, optionIndex: optIdx }));
   };
 
   const handleSkipExamQuestion = () => {
     if (!session || !session.questions[currentExamIndex]) return;
     const qId = session.questions[currentExamIndex]._id;
-    if (answers[qId] === undefined) {
-      setSkippedQuestions(prev => new Set(prev).add(qId));
-    }
-    if (currentExamIndex < session.questions.length - 1) {
-      setCurrentExamIndex(i => i + 1);
-    }
+    dispatch(skipExamQuestion(qId));
   };
 
   const handleNextExamQuestion = () => {
-    if (!session) return;
-    if (currentExamIndex < session.questions.length - 1) {
-      setCurrentExamIndex(i => i + 1);
-    }
+    dispatch(nextExamQuestion());
   };
 
   const handlePrevExamQuestion = () => {
-    if (currentExamIndex > 0) {
-      setCurrentExamIndex(i => i - 1);
-    }
+    dispatch(prevExamQuestion());
   };
 
   if (transcript) {
@@ -2843,13 +2910,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                setTranscript(null);
-                setSession(null);
-                setAnswers({});
-                setSkippedQuestions(new Set());
-                setCurrentExamIndex(0);
-              }}
+              onClick={() => dispatch(resetExam())}
               className="px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition active:scale-95"
             >
               New Exam
@@ -3186,7 +3247,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
         )}
 
         {/* Professional Navigation Controls (Sticky Bottom Bar) */}
-        <div className="sticky bottom-16 sm:bottom-2 z-20 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-lg sm:shadow-sm flex items-center gap-2 animate-fadeIn">
+        <div className="sticky bottom-2 z-20 pb-[env(safe-area-inset-bottom,0px)] bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-lg sm:shadow-sm flex items-center gap-2 animate-fadeIn">
           {/* Previous Button */}
           <button
             type="button"
@@ -3493,11 +3554,36 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Select Subject</label>
             <select
               value={config.subjectId}
-              onChange={(e) => setConfig({ ...config, subjectId: e.target.value })}
+              onChange={(e) => setConfig({ ...config, subjectId: e.target.value, bookId: '' })}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:outline-none focus:border-brand-navy"
             >
               {subjects.map(s => <option key={s._id} value={s._id}>{s.name} ({s.questionCount} MCQs)</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Reference Book / Syllabus Module
+            </label>
+            <select
+              value={config.bookId}
+              onChange={(e) => setConfig({ ...config, bookId: e.target.value })}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:outline-none focus:border-brand-navy"
+            >
+              <option value="">
+                All Reference Books & Syllabus ({subjects.find(s => s._id === config.subjectId)?.questionCount || 0} MCQs)
+              </option>
+              {subjectBooks.map(b => (
+                <option key={b._id} value={b._id}>
+                  {b.title} {b.author ? `— ${b.author}` : ''} ({b.questionCount || 0} MCQs)
+                </option>
+              ))}
+            </select>
+            {config.bookId && (
+              <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1 font-medium">
+                <Check className="w-3.5 h-3.5" />
+                <span>Custom syllabus focused on chosen textbook</span>
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -6202,6 +6288,7 @@ function Footer({ onOpenAppModal }) {
  * ======================================================================== */
 export default function App() {
   const location = useLocation();
+  const isExamActive = useSelector(selectIsExamActive);
   const [adminUser, setAdminUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('qb_admin_user') || 'null');
@@ -6337,7 +6424,7 @@ export default function App() {
         onInstallApp={handleInstallApp}
         isInstalled={isInstalled}
       />
-      <main key={location.pathname} className="flex-1 pb-16 md:pb-0 animate-fadeIn">
+      <main key={location.pathname} className={`flex-1 ${isExamActive ? 'pb-2' : 'pb-16 md:pb-0'} animate-fadeIn`}>
         <Routes>
           <Route
             path="/"
@@ -6365,7 +6452,7 @@ export default function App() {
         </Routes>
       </main>
       <Footer onOpenAppModal={() => setIsAppModalOpen(true)} />
-      <MobileBottomNav onOpenAppModal={() => setIsAppModalOpen(true)} />
+      {!isExamActive && <MobileBottomNav onOpenAppModal={() => setIsAppModalOpen(true)} />}
       {isAppModalOpen && (
         <MobileAppModal
           onClose={() => setIsAppModalOpen(false)}

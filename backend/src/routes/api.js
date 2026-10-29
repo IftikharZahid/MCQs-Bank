@@ -72,6 +72,7 @@ router.get('/status', async (req, res) => {
 });
 
 router.get('/subjects', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   try {
     const { search, program, language } = req.query;
     const filter = { status: 'published' };
@@ -118,6 +119,7 @@ router.get('/subjects/:id', async (req, res) => {
 });
 
 router.get('/books', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   try {
     const { subjectId, search } = req.query;
     const filter = { status: 'published' };
@@ -186,13 +188,31 @@ router.post('/exams/start', async (req, res) => {
     studentInstitution
   } = req.body;
   const matchStage = { status: 'published' };
-  if (subjectId) matchStage.subjectId = new Subject.base.Types.ObjectId(subjectId);
-  if (bookId) matchStage.bookId = new Book.base.Types.ObjectId(bookId);
+  if (subjectId) {
+    try {
+      matchStage.subjectId = new Subject.base.Types.ObjectId(subjectId);
+    } catch (_) {}
+  }
+  if (bookId) {
+    try {
+      matchStage.bookId = new Book.base.Types.ObjectId(bookId);
+    } catch (_) {}
+  }
 
-  const sampledQuestions = await Question.aggregate([
+  let sampledQuestions = await Question.aggregate([
     { $match: matchStage },
     { $sample: { size: Math.min(Number(questionCount), 100) } }
   ]);
+
+  // Graceful fallback: If specific book has 0 published questions, fall back to subject-level published questions
+  if (sampledQuestions.length === 0 && bookId && subjectId) {
+    try {
+      sampledQuestions = await Question.aggregate([
+        { $match: { subjectId: new Subject.base.Types.ObjectId(subjectId), status: 'published' } },
+        { $sample: { size: Math.min(Number(questionCount), 100) } }
+      ]);
+    } catch (_) {}
+  }
 
   if (sampledQuestions.length === 0) {
     return res.status(400).json({ success: false, message: 'No published questions found for this selection.' });

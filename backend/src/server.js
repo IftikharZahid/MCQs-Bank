@@ -88,8 +88,11 @@ export async function connectDB() {
   }
 }
 
-// Ensure DB is connected before handling requests
+// Ensure DB is connected before handling requests (bypass for status/health checks)
 app.use(async (req, res, next) => {
+  if (req.path === '/api/status' || req.path === '/status' || req.path === '/health') {
+    return next();
+  }
   try {
     await connectDB();
     next();
@@ -97,7 +100,7 @@ app.use(async (req, res, next) => {
     console.error('DB connection middleware error:', err.message);
     return res.status(503).json({
       success: false,
-      message: 'MongoDB connection failed. Please ensure MONGODB_URI is configured correctly in Vercel environment variables.',
+      message: 'MongoDB connection failed. Please ensure current IP address is whitelisted in MongoDB Atlas Network Access (0.0.0.0/0).',
       error: err.message
     });
   }
