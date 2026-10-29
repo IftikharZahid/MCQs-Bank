@@ -1271,6 +1271,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   const subjects = useSelector(selectAllSubjects);
   const books = useSelector(selectAllBooks);
   const catalogStatus = useSelector(selectCatalogStatus);
+  const loading = useSelector(selectCatalogLoading);
   const dbConnected = useSelector(selectDbConnected);
   const [dbAlertDismissed, setDbAlertDismissedLocal] = useState(false);
   const [status, setStatus] = useState(() => API_CACHE.status || { stats: { subjects: 0, books: 0, questions: 0, exams: 0 } });
