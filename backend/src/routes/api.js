@@ -42,9 +42,6 @@ router.get('/health', async (req, res) => {
 // 1. Preserved Legacy & Student Routes
 router.get('/status', async (req, res) => {
   try {
-    if (SERVER_CACHE.status.data && Date.now() < SERVER_CACHE.status.expiresAt) {
-      return res.json(SERVER_CACHE.status.data);
-    }
     const isDbConnected = req.app.get('mongooseReady') || (await import('mongoose')).default.connection.readyState === 1;
     let stats = { subjects: 0, books: 0, questions: 0, exams: 0, draftQuestions: 0 };
     if (isDbConnected) {
@@ -57,14 +54,12 @@ router.get('/status', async (req, res) => {
       ]);
       stats = { subjects, books, questions, exams, draftQuestions };
     }
-    const payload = {
+    res.json({
       status: 'online',
       database: isDbConnected ? 'connected' : 'connecting',
       timestamp: new Date().toISOString(),
       stats
-    };
-    SERVER_CACHE.status = { data: payload, expiresAt: Date.now() + 15000 };
-    res.json(payload);
+    });
   } catch (err) {
     res.json({
       status: 'online',
@@ -79,11 +74,6 @@ router.get('/status', async (req, res) => {
 router.get('/subjects', async (req, res) => {
   try {
     const { search, program, language } = req.query;
-    const isDefaultQuery = !search && !program && !language;
-    if (isDefaultQuery && SERVER_CACHE.subjects.data && Date.now() < SERVER_CACHE.subjects.expiresAt) {
-      return res.json(SERVER_CACHE.subjects.data);
-    }
-
     const filter = { status: 'published' };
     if (program) filter.programOrClass = program;
     if (language) filter.language = language;
@@ -110,11 +100,7 @@ router.get('/subjects', async (req, res) => {
       bookCount: bCountMap.get(String(sub._id)) || 0
     }));
 
-    const response = { success: true, data: enriched };
-    if (isDefaultQuery) {
-      SERVER_CACHE.subjects = { data: response, expiresAt: Date.now() + 30000 };
-    }
-    res.json(response);
+    res.json({ success: true, data: enriched });
   } catch (err) {
     console.error('Error fetching subjects:', err.message);
     res.status(500).json({ success: false, message: err.message, data: [] });
@@ -132,35 +118,31 @@ router.get('/subjects/:id', async (req, res) => {
 });
 
 router.get('/books', async (req, res) => {
-  const { subjectId, search } = req.query;
-  const isDefaultQuery = !subjectId && !search;
-  if (isDefaultQuery && SERVER_CACHE.books.data && Date.now() < SERVER_CACHE.books.expiresAt) {
-    return res.json(SERVER_CACHE.books.data);
+  try {
+    const { subjectId, search } = req.query;
+    const filter = { status: 'published' };
+    if (subjectId) filter.subjectId = subjectId;
+    if (search) filter.title = { $regex: search, $options: 'i' };
+
+    const [books, qCounts] = await Promise.all([
+      Book.find(filter).populate('subjectId', 'name slug programOrClass').sort({ createdAt: -1 }).lean(),
+      Question.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$bookId', count: { $sum: 1 } } }
+      ]).catch(() => [])
+    ]);
+
+    const qCountMap = new Map(qCounts.map(item => [String(item._id), item.count]));
+    const enriched = books.map(b => ({
+      ...b,
+      questionCount: qCountMap.get(String(b._id)) || 0
+    }));
+
+    res.json({ success: true, data: enriched });
+  } catch (err) {
+    console.error('Error fetching books:', err.message);
+    res.status(500).json({ success: false, message: err.message, data: [] });
   }
-
-  const filter = { status: 'published' };
-  if (subjectId) filter.subjectId = subjectId;
-  if (search) filter.title = { $regex: search, $options: 'i' };
-
-  const [books, qCounts] = await Promise.all([
-    Book.find(filter).populate('subjectId', 'name slug programOrClass').sort({ createdAt: -1 }).lean(),
-    Question.aggregate([
-      { $match: { status: 'published' } },
-      { $group: { _id: '$bookId', count: { $sum: 1 } } }
-    ]).catch(() => [])
-  ]);
-
-  const qCountMap = new Map(qCounts.map(item => [String(item._id), item.count]));
-  const enriched = books.map(b => ({
-    ...b,
-    questionCount: qCountMap.get(String(b._id)) || 0
-  }));
-
-  const response = { success: true, data: enriched };
-  if (isDefaultQuery) {
-    SERVER_CACHE.books = { data: response, expiresAt: Date.now() + 30000 };
-  }
-  res.json(response);
 });
 
 router.get('/questions', async (req, res) => {

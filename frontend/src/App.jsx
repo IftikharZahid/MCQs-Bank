@@ -283,6 +283,16 @@ const API_CACHE = {
   questions: {}
 };
 
+export function invalidateClientCache() {
+  API_CACHE.status = null;
+  API_CACHE.subjects = null;
+  API_CACHE.books = null;
+  API_CACHE.questions = {};
+  try {
+    window.dispatchEvent(new CustomEvent('academic_catalog_updated'));
+  } catch (_) {}
+}
+
 /* ==========================================================================
  * TOP PROGRESS BAR FOR ROUTE NAVIGATION (Fast visual feedback)
  * ======================================================================== */
@@ -1183,16 +1193,18 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
 function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   const [status, setStatus] = useState(() => API_CACHE.status || { stats: { subjects: 0, books: 0, questions: 0, exams: 0 } });
   const [subjects, setSubjects] = useState(() => API_CACHE.subjects || []);
+  const [books, setBooks] = useState(() => API_CACHE.books || []);
+  const [homeExploreTab, setHomeExploreTab] = useState('books'); // 'books' or 'subjects'
   const [recentExams, setRecentExams] = useState([]);
-  const [loading, setLoading] = useState(() => !API_CACHE.subjects);
+  const [loading, setLoading] = useState(() => !API_CACHE.subjects || !API_CACHE.books);
   const [progressData, setProgressData] = useState(() => getStudentProgressData());
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchHomeData = () => {
     fetch('/api/status')
       .then(r => r.json())
       .then(d => {
-        if (d) {
+        if (d?.stats) {
           setStatus(d);
           API_CACHE.status = d;
         }
@@ -1209,22 +1221,40 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       })
       .catch(() => setLoading(false));
 
+    fetch('/api/books')
+      .then(r => r.json())
+      .then(d => {
+        const list = d.data || [];
+        setBooks(list);
+        API_CACHE.books = list;
+      })
+      .catch(() => {});
+
     fetch('/api/exams/recent')
       .then(r => r.json())
       .then(d => setRecentExams(d.data || []))
       .catch(() => {});
+  };
 
-    const handleSync = () => setProgressData(getStudentProgressData());
+  useEffect(() => {
+    fetchHomeData();
+
+    const handleSync = () => {
+      setProgressData(getStudentProgressData());
+      fetchHomeData();
+    };
     window.addEventListener('academic_progress_updated', handleSync);
+    window.addEventListener('academic_catalog_updated', handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
       window.removeEventListener('academic_progress_updated', handleSync);
+      window.removeEventListener('academic_catalog_updated', handleSync);
       window.removeEventListener('storage', handleSync);
     };
   }, []);
 
   const filteredSubjects = subjects;
-  const totalBankQuestions = status.stats?.questions || subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) || 158;
+  const totalBankQuestions = status.stats?.questions || subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) || 721;
   const overallStats = getOverallStudentStats(totalBankQuestions);
 
   return (
@@ -1323,57 +1353,70 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
         </div>
       </section>
 
-      {/* 2. SUMMARY STATS CARD (Connected to Real Student Metrics) */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-2 sm:p-4">
-        <div className="grid grid-cols-4 divide-x divide-slate-100 items-center text-center">
-          {/* Metric 1: Books */}
-          <div className="flex flex-col items-center justify-center px-0.5 sm:px-2">
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1">
+      {/* 2. SUMMARY STATS CARD (Accurate Real-Time Metrics for Both Books & Subjects) */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-2.5 sm:p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 items-center text-center gap-y-2.5 sm:gap-y-0">
+          {/* Metric 1: Reference Books */}
+          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1">
               <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
-              {String(status.stats?.books || subjects.reduce((acc, s) => acc + (s.books?.length || s.bookCount || 1), 0) || 5).padStart(2, '0')}
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+              {String(status.stats?.books ?? books.length).padStart(2, '0')}
             </span>
-            <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
-              Books
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+              Syllabus Books
             </span>
           </div>
 
-          {/* Metric 2: Total MCQs */}
-          <div className="flex flex-col items-center justify-center px-0.5 sm:px-2">
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1">
+          {/* Metric 2: Academic Subjects */}
+          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1">
+              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+            </div>
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+              {String(status.stats?.subjects ?? subjects.length).padStart(2, '0')}
+            </span>
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+              Active Subjects
+            </span>
+          </div>
+
+          {/* Metric 3: Total MCQs */}
+          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1">
               <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
-              {totalBankQuestions}
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+              {status.stats?.questions || totalBankQuestions}
             </span>
-            <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
               Total MCQs
             </span>
           </div>
 
-          {/* Metric 3: Solved MCQs by Candidate */}
-          <div className="flex flex-col items-center justify-center px-0.5 sm:px-2">
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
+          {/* Metric 4: Solved MCQs by Candidate */}
+          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
               <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
               {overallStats.totalSolved}
             </span>
-            <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
               Solved MCQs
             </span>
           </div>
 
-          {/* Metric 4: Bank Solved % */}
-          <div className="flex flex-col items-center justify-center px-0.5 sm:px-2">
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1">
+          {/* Metric 5: Bank Solved % */}
+          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0 col-span-2 sm:col-span-1">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1">
               <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-xs xs:text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
               {overallStats.overallPercentage}%
             </span>
-            <span className="text-[8px] xs:text-[9px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
               Bank Solved
             </span>
           </div>
@@ -1588,148 +1631,277 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
         })()
       )}
 
-      {/* 4. EXPLORE QUESTION BANKS SECTION */}
+      {/* 4. EXPLORE QUESTION BANKS & SYLLABUS BOOKS */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-lg">📖</span>
-              <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Explore Question Banks</h2>
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Explore Question Banks & Books</h2>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Select a subject to begin your academic practice.</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+              Select any accredited syllabus textbook or course subject to begin practice.
+            </p>
           </div>
-          <button
-            onClick={() => navigate('/catalog')}
-            className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition shrink-0"
-          >
-            <span>View All</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {/* View Mode Toggle Switcher */}
+            <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 text-xs font-bold border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setHomeExploreTab('books')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                  homeExploreTab === 'books'
+                    ? 'bg-brand-navy text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Books ({books.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setHomeExploreTab('subjects')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                  homeExploreTab === 'subjects'
+                    ? 'bg-brand-navy text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Subjects ({subjects.length})</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => navigate('/catalog')}
+              className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition shrink-0"
+            >
+              <span>Catalog View</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        {/* Subject Cards with Real Student Progress Bars */}
-        {loading && filteredSubjects.length === 0 ? (
+        {/* Loading State */}
+        {loading && books.length === 0 && subjects.length === 0 ? (
           <div className="py-12 bg-white rounded-2xl border border-slate-200/90 shadow-sm flex flex-col items-center justify-center text-center animate-fadeIn">
             <div className="w-9 h-9 rounded-full border-3 border-amber-400/20 border-t-amber-500 animate-spin mb-3" />
-            <p className="text-xs font-bold text-slate-700">Loading Question Banks...</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Retrieving verified academic subjects and syllabus modules</p>
+            <p className="text-xs font-bold text-slate-700">Loading Academic Question Banks...</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Retrieving verified textbooks and curriculum modules</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
-          {filteredSubjects.map(sub => {
-            const theme = getSubjectTheme(sub.name);
-            const IconComponent = theme.icon;
-            const moduleCount = sub.bookCount || sub.books?.length || 1;
-            const subStats = getSubjectSolvedStats(sub._id, sub.questionCount || 0);
+        ) : homeExploreTab === 'books' ? (
+          /* ================================================================
+           * TAB A: SYLLABUS REFERENCE BOOKS GRID
+           * ================================================================ */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3.5 sm:gap-4">
+            {books.map(book => {
+              const theme = getSubjectTheme(book.subjectId?.name || book.title);
+              const IconComponent = theme.icon || BookOpen;
+              const subId = book.subjectId?._id || book.subjectId;
+              const subName = book.subjectId?.name || 'Academic Subject';
 
-            return (
-              <div
-                key={sub._id}
-                onClick={() => {
-                  recordRecentActivitySession({
-                    type: 'practice',
-                    subjectId: sub._id,
-                    subjectName: sub.name,
-                    totalQuestions: sub.questionCount || 0
-                  });
-                  navigate(`/practice?subjectId=${sub._id}`);
-                }}
-                className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition group flex flex-col justify-between cursor-pointer"
-              >
-                <div>
-                  <div className="flex items-center gap-3.5">
-                    {/* Colored squircle icon matching mockup */}
-                    <div className={`w-12 h-12 rounded-2xl ${theme.bg} text-white flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition transform`}>
-                      <IconComponent className="w-6 h-6 stroke-[2.2]" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
-                          {sub.name}
-                        </h3>
-                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition shrink-0" />
+              return (
+                <div
+                  key={book._id}
+                  onClick={() => {
+                    recordRecentActivitySession({
+                      type: 'practice',
+                      subjectId: subId,
+                      bookId: book._id,
+                      subjectName: subName,
+                      bookTitle: book.title,
+                      totalQuestions: book.questionCount || 0
+                    });
+                    navigate(subId ? `/practice?subjectId=${subId}&bookId=${book._id}` : `/practice`);
+                  }}
+                  className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-slate-300 transition group flex flex-col justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-12 h-12 rounded-2xl ${theme.bg} text-white flex items-center justify-center shadow-xs shrink-0 group-hover:scale-105 transition transform`}>
+                        <IconComponent className="w-6 h-6 stroke-[2.2]" />
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                        <span className="font-medium">{sub.questionCount || 0} MCQs</span>
-                        <span>•</span>
-                        <span>{String(moduleCount).padStart(2, '0')} Modules</span>
-                      </div>
-
-                      {/* Actual Student Subject Progress Bar */}
-                      <div className="mt-2.5">
-                        <div className="flex items-center justify-between text-[11px] mb-1">
-                          <span className="font-semibold text-slate-500">
-                            {subStats.solvedCount > 0 ? (
-                              <span className="text-slate-800 font-bold">
-                                {subStats.solvedCount} of {sub.questionCount || 0} Solved
-                              </span>
-                            ) : (
-                              <span>Subject Progress</span>
-                            )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 truncate max-w-[190px]">
+                            {subName}
                           </span>
-                          <span className={`font-black ${subStats.percentage > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
-                            {subStats.percentage}%
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                            {book.questionCount || 0} MCQs
                           </span>
                         </div>
-                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${theme.progressColor} rounded-full transition-all duration-500`}
-                            style={{ width: `${subStats.percentage}%` }}
-                          />
+
+                        <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-600 transition leading-snug line-clamp-2 mt-1">
+                          {book.title}
+                        </h3>
+
+                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                          Author: <strong className="text-slate-700">{book.author || 'Academic Curriculum'}</strong>
+                          {book.edition ? ` • ${book.edition}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        recordRecentActivitySession({
+                          type: 'practice',
+                          subjectId: subId,
+                          bookId: book._id,
+                          subjectName: subName,
+                          bookTitle: book.title,
+                          totalQuestions: book.questionCount || 0
+                        });
+                        navigate(subId ? `/practice?subjectId=${subId}&bookId=${book._id}` : `/practice`);
+                      }}
+                      className="flex-1 py-1.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition text-center cursor-pointer"
+                    >
+                      Practice Book MCQs
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        recordRecentActivitySession({
+                          type: 'exam',
+                          subjectId: subId,
+                          bookId: book._id,
+                          subjectName: subName,
+                          bookTitle: book.title,
+                          totalQuestions: book.questionCount || 0
+                        });
+                        navigate(subId ? `/exam?subjectId=${subId}&bookId=${book._id}` : `/exam`);
+                      }}
+                      className="flex-1 py-1.5 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition text-center cursor-pointer"
+                    >
+                      Start Exam
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ================================================================
+           * TAB B: ACADEMIC SUBJECTS GRID
+           * ================================================================ */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+            {subjects.map(sub => {
+              const theme = getSubjectTheme(sub.name);
+              const IconComponent = theme.icon;
+              const subStats = getSubjectSolvedStats(sub._id, sub.questionCount || 0);
+              const matchingBook = books.find(b => (b.subjectId?._id || b.subjectId) === sub._id);
+
+              return (
+                <div
+                  key={sub._id}
+                  onClick={() => {
+                    recordRecentActivitySession({
+                      type: 'practice',
+                      subjectId: sub._id,
+                      subjectName: sub.name,
+                      totalQuestions: sub.questionCount || 0
+                    });
+                    navigate(`/practice?subjectId=${sub._id}`);
+                  }}
+                  className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-slate-300 transition group flex flex-col justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-12 h-12 rounded-2xl ${theme.bg} text-white flex items-center justify-center shadow-xs shrink-0 group-hover:scale-105 transition transform`}>
+                        <IconComponent className="w-6 h-6 stroke-[2.2]" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
+                            {sub.name}
+                          </h3>
+                          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition shrink-0" />
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                          <span className="font-semibold text-slate-700">{sub.questionCount || 0} MCQs</span>
+                          <span>•</span>
+                          <span className="truncate">{matchingBook ? matchingBook.title : `${sub.bookCount || 1} Syllabus Book`}</span>
+                        </div>
+
+                        {/* Subject Progress Bar */}
+                        <div className="mt-2.5">
+                          <div className="flex items-center justify-between text-[11px] mb-1">
+                            <span className="font-semibold text-slate-500">
+                              {subStats.solvedCount > 0 ? (
+                                <span className="text-slate-800 font-bold">
+                                  {subStats.solvedCount} of {sub.questionCount || 0} Solved
+                                </span>
+                              ) : (
+                                <span>Subject Progress</span>
+                              )}
+                            </span>
+                            <span className={`font-black ${subStats.percentage > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                              {subStats.percentage}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${theme.progressColor} rounded-full transition-all duration-500`}
+                              style={{ width: `${subStats.percentage}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Quick Action Footer Buttons */}
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      recordRecentActivitySession({
-                        type: 'practice',
-                        subjectId: sub._id,
-                        subjectName: sub.name,
-                        totalQuestions: sub.questionCount || 0
-                      });
-                      navigate(`/practice?subjectId=${sub._id}`);
-                    }}
-                    className="flex-1 py-1.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition text-center"
-                  >
-                    Practice MCQs
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      recordRecentActivitySession({
-                        type: 'exam',
-                        subjectId: sub._id,
-                        subjectName: sub.name,
-                        totalQuestions: sub.questionCount || 0
-                      });
-                      navigate(`/exam?subjectId=${sub._id}`);
-                    }}
-                    className="flex-1 py-1.5 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition text-center"
-                  >
-                    Start Exam
-                  </button>
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        recordRecentActivitySession({
+                          type: 'practice',
+                          subjectId: sub._id,
+                          subjectName: sub.name,
+                          totalQuestions: sub.questionCount || 0
+                        });
+                        navigate(`/practice?subjectId=${sub._id}`);
+                      }}
+                      className="flex-1 py-1.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition text-center cursor-pointer"
+                    >
+                      Practice MCQs
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        recordRecentActivitySession({
+                          type: 'exam',
+                          subjectId: sub._id,
+                          subjectName: sub.name,
+                          totalQuestions: sub.questionCount || 0
+                        });
+                        navigate(`/exam?subjectId=${sub._id}`);
+                      }}
+                      className="flex-1 py-1.5 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition text-center cursor-pointer"
+                    >
+                      Start Exam
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
 
-        {/* Mockup Bottom Pill Button: View All Subjects */}
+        {/* Bottom Pill Button: View Complete Catalog */}
         <button
           onClick={() => navigate('/catalog')}
-          className="w-full py-3.5 px-4 rounded-2xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100/80 text-blue-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition shadow-sm mt-2"
+          className="w-full py-3.5 px-4 rounded-2xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100/80 text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition shadow-xs mt-2 cursor-pointer"
         >
           <Layers className="w-4 h-4" />
-          <span>View All Subjects</span>
+          <span>View All {books.length} Syllabus Books in Catalog</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
@@ -1786,14 +1958,18 @@ function CatalogPage() {
   const [loading, setLoading] = useState(() => !API_CACHE.books || !API_CACHE.subjects);
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchCatalogData = (forceRefresh = false) => {
+    if (forceRefresh) {
+      setLoading(true);
+    }
+    const t = Date.now();
     Promise.all([
-      fetch('/api/subjects').then(r => r.json()).then(d => {
+      fetch(`/api/subjects?t=${t}`).then(r => r.json()).then(d => {
         const list = d.data || [];
         API_CACHE.subjects = list;
         return list;
       }).catch(() => []),
-      fetch('/api/books').then(r => r.json()).then(d => {
+      fetch(`/api/books?t=${t}`).then(r => r.json()).then(d => {
         const list = d.data || [];
         API_CACHE.books = list;
         return list;
@@ -1805,9 +1981,16 @@ function CatalogPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchCatalogData();
+    const handleUpdate = () => fetchCatalogData(true);
+    window.addEventListener('academic_catalog_updated', handleUpdate);
+    return () => window.removeEventListener('academic_catalog_updated', handleUpdate);
   }, []);
 
-  if (loading) {
+  if (loading && books.length === 0) {
     return (
       <AcademicLoader
         title="Loading Course & Book Catalog"
@@ -1818,7 +2001,8 @@ function CatalogPage() {
 
   const query = searchQuery.trim().toLowerCase();
   const visibleBooks = books.filter(b => {
-    const matchesSubject = !selectedSubject || b.subjectId?._id === selectedSubject;
+    const bSubId = b.subjectId?._id ? String(b.subjectId._id) : (b.subjectId ? String(b.subjectId) : '');
+    const matchesSubject = !selectedSubject || bSubId === String(selectedSubject);
     if (!matchesSubject) return false;
     if (!query) return true;
     const titleMatch = b.title?.toLowerCase().includes(query);
@@ -1898,7 +2082,10 @@ function CatalogPage() {
 
           {subjects.map(s => {
             const isSelected = selectedSubject === s._id;
-            const subBookCount = books.filter(b => b.subjectId?._id === s._id).length;
+            const subBookCount = books.filter(b => {
+              const bSubId = b.subjectId?._id ? String(b.subjectId._id) : String(b.subjectId || '');
+              return bSubId === String(s._id);
+            }).length;
             return (
               <button
                 key={s._id}
@@ -1949,8 +2136,10 @@ function CatalogPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {visibleBooks.map(book => {
-            const theme = getSubjectTheme(book.subjectId?.name);
+            const theme = getSubjectTheme(book.subjectId?.name || book.title);
             const IconComp = theme.icon || BookOpen;
+            const bSubId = book.subjectId?._id || book.subjectId;
+            const bSubName = book.subjectId?.name || book.title;
 
             return (
               <div
@@ -2006,11 +2195,13 @@ function CatalogPage() {
                     onClick={() => {
                       recordRecentActivitySession({
                         type: 'practice',
-                        subjectId: book.subjectId?._id || book.subjectId,
-                        subjectName: book.subjectId?.name || book.title,
+                        subjectId: bSubId,
+                        bookId: book._id,
+                        subjectName: bSubName,
+                        bookTitle: book.title,
                         totalQuestions: book.questionCount || 0
                       });
-                      navigate(`/practice?bookId=${book._id}`);
+                      navigate(bSubId ? `/practice?subjectId=${bSubId}&bookId=${book._id}` : `/practice?bookId=${book._id}`);
                     }}
                     className="flex-1 py-1.5 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1 active:scale-98"
                   >
@@ -2022,11 +2213,13 @@ function CatalogPage() {
                     onClick={() => {
                       recordRecentActivitySession({
                         type: 'exam',
-                        subjectId: book.subjectId?._id || book.subjectId,
-                        subjectName: book.subjectId?.name || book.title,
+                        subjectId: bSubId,
+                        bookId: book._id,
+                        subjectName: bSubName,
+                        bookTitle: book.title,
                         totalQuestions: book.questionCount || 0
                       });
-                      navigate(`/exam?bookId=${book._id}`);
+                      navigate(bSubId ? `/exam?subjectId=${bSubId}&bookId=${book._id}` : `/exam?bookId=${book._id}`);
                     }}
                     className="flex-1 py-1.5 px-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center justify-center gap-1 active:scale-98"
                   >
@@ -3473,6 +3666,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
           }
         } catch (_) {}
       }
+      invalidateClientCache();
     } catch (err) {
       console.error('Failed to refresh admin data:', err);
     } finally {
