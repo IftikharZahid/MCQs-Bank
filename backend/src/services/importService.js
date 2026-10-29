@@ -113,7 +113,9 @@ export function normalizeQuestionRecord(raw, index = 0, { randomize = false } = 
       difficulty: ['easy', 'medium', 'hard'].includes(String(raw.difficulty).toLowerCase())
         ? String(raw.difficulty).toLowerCase()
         : 'medium',
-      language: raw.language || (isUrdu ? 'ur' : 'en')
+      language: raw.language || (isUrdu ? 'ur' : 'en'),
+      book: String(raw.book || raw.bookTitle || raw.bookName || raw.Book || '').trim(),
+      subject: String(raw.subject || raw.subjectName || raw.course || raw.Subject || '').trim()
     }
   };
 }
@@ -138,33 +140,60 @@ export function parseRawTextBlocks(text) {
   return extracted;
 }
 
-export function parseJsonContent(content) {
+export function parseJsonContent(content, originalName = '') {
   const parsed = typeof content === 'string' ? JSON.parse(content) : content;
   let rawQuestions = [];
   let metadata = {};
 
   if (Array.isArray(parsed)) {
     rawQuestions = parsed;
+    const firstWithBook = parsed.find(item => item && (item.book || item.bookTitle || item.bookName || item.Book));
+    const firstWithSubject = parsed.find(item => item && (item.subject || item.subjectName || item.course || item.Subject));
+    const firstWithProgram = parsed.find(item => item && (item.programOrClass || item.program || item.Program));
+    const firstWithSemester = parsed.find(item => item && (item.semester || item.Semester));
+    metadata = {
+      subject: firstWithSubject ? (firstWithSubject.subject || firstWithSubject.subjectName || firstWithSubject.course || firstWithSubject.Subject) : null,
+      book: firstWithBook ? (firstWithBook.book || firstWithBook.bookTitle || firstWithBook.bookName || firstWithBook.Book) : null,
+      programOrClass: firstWithProgram ? (firstWithProgram.programOrClass || firstWithProgram.program || firstWithProgram.Program) : null,
+      semester: firstWithSemester ? (firstWithSemester.semester || firstWithSemester.Semester) : null
+    };
   } else if (typeof parsed === 'object' && parsed !== null) {
     rawQuestions = parsed.questions || parsed.mcqs || parsed.data || parsed.items || [];
     metadata = {
       subject: parsed.subject || parsed.subjectName || parsed.course || null,
-      book: parsed.book || parsed.bookTitle || null,
+      book: parsed.book || parsed.bookTitle || parsed.bookName || null,
       programOrClass: parsed.programOrClass || parsed.program || null,
       semester: parsed.semester || null
     };
   }
+
+  // If no explicit book in metadata, check if filename implies a book name
+  if (!metadata.book && originalName) {
+    const cleanFileName = originalName.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim();
+    if (cleanFileName && !cleanFileName.toLowerCase().includes('mcq') && !cleanFileName.toLowerCase().includes('backup')) {
+      metadata.book = cleanFileName;
+    }
+  }
+
   return { rawQuestions, metadata, requiresDraftReview: false };
 }
 
 export async function parseUploadedFile(fileBuffer, mimeType, originalName) {
   const ext = originalName.split('.').pop().toLowerCase();
   if (ext === 'json' || mimeType === 'application/json') {
-    return parseJsonContent(fileBuffer.toString('utf-8'));
+    return parseJsonContent(fileBuffer.toString('utf-8'), originalName);
   }
   if (ext === 'csv' || mimeType === 'text/csv') {
     const records = parse(fileBuffer.toString('utf-8'), { columns: true, skip_empty_lines: true });
-    return { rawQuestions: records, metadata: {}, requiresDraftReview: false };
+    const firstWithBook = records.find(item => item && (item.book || item.bookTitle || item.bookName || item.Book));
+    const firstWithSubject = records.find(item => item && (item.subject || item.subjectName || item.course || item.Subject));
+    const firstWithProgram = records.find(item => item && (item.programOrClass || item.program || item.Program));
+    const metadata = {
+      book: firstWithBook ? (firstWithBook.book || firstWithBook.bookTitle || firstWithBook.bookName || firstWithBook.Book) : null,
+      subject: firstWithSubject ? (firstWithSubject.subject || firstWithSubject.subjectName || firstWithSubject.course || firstWithSubject.Subject) : null,
+      programOrClass: firstWithProgram ? (firstWithProgram.programOrClass || firstWithProgram.program || firstWithProgram.Program) : null
+    };
+    return { rawQuestions: records, metadata, requiresDraftReview: false };
   }
   if (ext === 'docx') {
     const { value } = await mammoth.extractRawText({ buffer: fileBuffer });

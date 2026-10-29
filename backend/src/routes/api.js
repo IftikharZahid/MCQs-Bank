@@ -497,31 +497,63 @@ router.get('/admin/books', requireAuth, async (req, res) => {
 // Admin Books: Create
 router.post('/admin/books', requireAuth, async (req, res) => {
   const { title, subjectId, author, edition, programOrClass, semester, language, status, description } = req.body;
-  if (!title || !subjectId) {
+  if (!title || !title.trim() || !subjectId) {
     return res.status(400).json({ success: false, message: 'Book title and subject are required.' });
   }
-  const book = await Book.create({
-    title: title.trim(),
+
+  const subject = await Subject.findById(subjectId);
+  if (!subject) {
+    return res.status(404).json({ success: false, message: 'Selected subject not found.' });
+  }
+
+  const cleanTitle = title.trim();
+  const escapedTitle = cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const existing = await Book.findOne({
     subjectId,
-    author: author || '',
-    edition: edition || '',
-    programOrClass: programOrClass || '',
-    semester: semester || '',
-    language: language || 'en',
+    title: new RegExp(`^${escapedTitle}$`, 'i')
+  });
+
+  if (existing) {
+    return res.status(400).json({ success: false, message: `A book titled "${cleanTitle}" already exists for this subject.` });
+  }
+
+  const book = await Book.create({
+    title: cleanTitle,
+    subjectId,
+    author: author ? author.trim() : (subject.name ? `${subject.name} Faculty` : 'Academic Faculty'),
+    edition: edition ? edition.trim() : 'Standard Edition',
+    programOrClass: programOrClass || subject.programOrClass || 'General',
+    semester: semester || subject.semester || '',
+    academicYear: subject.academicYear || '2026',
+    language: language || subject.language || 'en',
     status: status || 'published',
-    description: description || ''
+    description: description ? description.trim() : ''
   });
   SERVER_CACHE.invalidate();
-  res.status(201).json({ success: true, data: book });
+  res.status(201).json({ success: true, message: `Book "${book.title}" created successfully.`, data: book });
 });
 
 // Admin Books: Update
 router.put('/admin/books/:id', requireAuth, async (req, res) => {
   try {
-    const book = await Book.findByIdAndUpdate(req.params.id, { $set: req.body, $inc: { contentVersion: 1 } }, { new: true });
+    const { title, subjectId, author, edition, programOrClass, semester, language, status, description } = req.body;
+    const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ success: false, message: 'Book not found' });
+
+    if (title && title.trim()) book.title = title.trim();
+    if (subjectId) book.subjectId = subjectId;
+    if (author !== undefined) book.author = author.trim();
+    if (edition !== undefined) book.edition = edition.trim();
+    if (programOrClass !== undefined) book.programOrClass = programOrClass.trim();
+    if (semester !== undefined) book.semester = semester.trim();
+    if (language !== undefined) book.language = language;
+    if (status !== undefined) book.status = status;
+    if (description !== undefined) book.description = description.trim();
+    book.contentVersion = (book.contentVersion || 1) + 1;
+
+    await book.save();
     SERVER_CACHE.invalidate();
-    res.json({ success: true, data: book });
+    res.json({ success: true, message: `Book "${book.title}" updated successfully.`, data: book });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -686,11 +718,21 @@ router.post('/admin/imports/json', requireAuth, async (req, res) => {
     let metadata = {};
     if (Array.isArray(parsedData)) {
       rawQuestions = parsedData;
+      const firstWithBook = parsedData.find(item => item && (item.book || item.bookTitle || item.bookName || item.Book));
+      const firstWithSubject = parsedData.find(item => item && (item.subject || item.subjectName || item.course || item.Subject));
+      const firstWithProgram = parsedData.find(item => item && (item.programOrClass || item.program || item.Program));
+      const firstWithSemester = parsedData.find(item => item && (item.semester || item.Semester));
+      metadata = {
+        subject: firstWithSubject ? (firstWithSubject.subject || firstWithSubject.subjectName || firstWithSubject.course || firstWithSubject.Subject) : null,
+        book: firstWithBook ? (firstWithBook.book || firstWithBook.bookTitle || firstWithBook.bookName || firstWithBook.Book) : null,
+        programOrClass: firstWithProgram ? (firstWithProgram.programOrClass || firstWithProgram.program || firstWithProgram.Program) : null,
+        semester: firstWithSemester ? (firstWithSemester.semester || firstWithSemester.Semester) : null
+      };
     } else if (typeof parsedData === 'object' && parsedData !== null) {
       rawQuestions = parsedData.questions || parsedData.mcqs || parsedData.data || parsedData.items || [];
       metadata = {
         subject: parsedData.subject || parsedData.subjectName || parsedData.course || null,
-        book: parsedData.book || parsedData.bookTitle || null,
+        book: parsedData.book || parsedData.bookTitle || parsedData.bookName || null,
         programOrClass: parsedData.programOrClass || parsedData.program || null,
         semester: parsedData.semester || null
       };
@@ -736,7 +778,18 @@ router.post('/admin/imports/json', requireAuth, async (req, res) => {
 
 // Admin Upload / Commit MCQs to Database
 router.post('/upload', requireAuth, async (req, res) => {
-  const { subjectId, createNewSubject, bookTitle, questions = [], publishImmediately = true, randomizeOptions = true } = req.body;
+  const {
+    subjectId,
+    createNewSubject,
+    bookId,
+    bookTitle,
+    bookAuthor,
+    bookEdition,
+    questions = [],
+    publishImmediately = true,
+    randomizeOptions = true
+  } = req.body;
+
   let targetSubjectId = subjectId;
 
   if (!targetSubjectId && createNewSubject?.name) {
@@ -747,6 +800,8 @@ router.post('/upload', requireAuth, async (req, res) => {
       code: createNewSubject.code || '',
       programOrClass: createNewSubject.programOrClass || 'General',
       semester: createNewSubject.semester || '',
+      academicYear: createNewSubject.academicYear || '2026',
+      language: createNewSubject.language || 'en',
       status: 'published'
     });
     targetSubjectId = createdSub._id;
@@ -756,30 +811,131 @@ router.post('/upload', requireAuth, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please select an existing subject or provide a new subject name.' });
   }
 
-  let targetBook = null;
-  if (bookTitle && targetSubjectId) {
-    targetBook = await Book.findOneAndUpdate(
-      { title: bookTitle.trim(), subjectId: targetSubjectId },
-      { $setOnInsert: { title: bookTitle.trim(), subjectId: targetSubjectId, status: 'published' }, $inc: { contentVersion: 1 } },
-      { upsert: true, new: true }
-    );
+  const targetSubject = await Subject.findById(targetSubjectId);
+  if (!targetSubject) {
+    return res.status(404).json({ success: false, message: 'Target subject could not be found.' });
   }
 
+  // 1. Resolve Target Book
+  let targetBook = null;
+  if (bookId) {
+    targetBook = await Book.findById(bookId);
+  }
+
+  const cleanBookTitle = (bookTitle && typeof bookTitle === 'string') ? bookTitle.trim() : '';
+
+  if (!targetBook && cleanBookTitle) {
+    const escapedTitle = cleanBookTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    targetBook = await Book.findOne({
+      subjectId: targetSubjectId,
+      title: new RegExp(`^${escapedTitle}$`, 'i')
+    });
+
+    if (!targetBook) {
+      targetBook = await Book.create({
+        title: cleanBookTitle,
+        subjectId: targetSubjectId,
+        author: bookAuthor ? bookAuthor.trim() : (targetSubject.name ? `${targetSubject.name} Faculty` : 'Academic Faculty'),
+        edition: bookEdition ? bookEdition.trim() : 'Standard Edition',
+        programOrClass: targetSubject.programOrClass || 'General',
+        semester: targetSubject.semester || '',
+        academicYear: targetSubject.academicYear || '2026',
+        language: targetSubject.language || 'en',
+        status: 'published'
+      });
+    } else {
+      targetBook.status = 'published';
+      if (bookAuthor && !targetBook.author) targetBook.author = bookAuthor.trim();
+      if (bookEdition && !targetBook.edition) targetBook.edition = bookEdition.trim();
+      targetBook.contentVersion = (targetBook.contentVersion || 1) + 1;
+      await targetBook.save();
+    }
+  }
+
+  // If still no targetBook, check if questions array contains a book title
+  if (!targetBook) {
+    const detectedInQuestions = questions.find(q => q && (q.book || q.bookTitle || q.bookName));
+    const detectedTitle = detectedInQuestions ? (detectedInQuestions.book || detectedInQuestions.bookTitle || detectedInQuestions.bookName) : '';
+    if (detectedTitle && typeof detectedTitle === 'string' && detectedTitle.trim()) {
+      const escapedDetected = detectedTitle.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      targetBook = await Book.findOne({
+        subjectId: targetSubjectId,
+        title: new RegExp(`^${escapedDetected}$`, 'i')
+      });
+      if (!targetBook) {
+        targetBook = await Book.create({
+          title: detectedTitle.trim(),
+          subjectId: targetSubjectId,
+          author: targetSubject.name ? `${targetSubject.name} Faculty` : 'Academic Faculty',
+          edition: 'Standard Edition',
+          programOrClass: targetSubject.programOrClass || 'General',
+          semester: targetSubject.semester || '',
+          academicYear: targetSubject.academicYear || '2026',
+          language: targetSubject.language || 'en',
+          status: 'published'
+        });
+      }
+    }
+  }
+
+  // If STILL no targetBook, find existing published book for this subject or auto-create reference syllabus book
+  if (!targetBook) {
+    targetBook = await Book.findOne({ subjectId: targetSubjectId, status: 'published' });
+    if (!targetBook) {
+      targetBook = await Book.create({
+        title: `${targetSubject.name} Reference Textbook`,
+        subjectId: targetSubjectId,
+        author: 'Academic Curriculum',
+        edition: '2026 Edition',
+        programOrClass: targetSubject.programOrClass || 'General',
+        semester: targetSubject.semester || '',
+        academicYear: targetSubject.academicYear || '2026',
+        language: targetSubject.language || 'en',
+        status: 'published'
+      });
+    }
+  }
+
+  // 2. Insert questions & link to targetBook
   let insertedCount = 0;
   let skippedDuplicates = 0;
+  let linkedExistingCount = 0;
+
   for (const rawQ of questions) {
     const norm = normalizeQuestionRecord(rawQ, 0, { randomize: Boolean(randomizeOptions) });
     if (!norm.valid) continue;
+
+    const normalizedText = norm.data.question.trim().toLowerCase().replace(/\s+/g, ' ');
+    const normalizedOpts = (norm.data.options || []).map(o => String(o).trim().toLowerCase()).join('|');
+    const fingerprint = crypto
+      .createHash('sha256')
+      .update(`${targetSubjectId.toString()}::${normalizedText}::${normalizedOpts}`)
+      .digest('hex');
+
     try {
       await Question.create({
         ...norm.data,
         subjectId: targetSubjectId,
         bookId: targetBook ? targetBook._id : undefined,
-        status: publishImmediately ? 'published' : 'draft'
+        status: publishImmediately ? 'published' : 'draft',
+        fingerprint,
+        normalizedQuestion: normalizedText
       });
       insertedCount++;
     } catch (err) {
-      if (err.code === 11000) skippedDuplicates++;
+      if (err.code === 11000) {
+        skippedDuplicates++;
+        // If question already existed in this subject, link its bookId to targetBook
+        if (targetBook) {
+          const updateRes = await Question.updateOne(
+            { fingerprint },
+            { $set: { bookId: targetBook._id, status: publishImmediately ? 'published' : 'draft' } }
+          );
+          if (updateRes.modifiedCount > 0) {
+            linkedExistingCount++;
+          }
+        }
+      }
     }
   }
 
@@ -790,8 +946,10 @@ router.post('/upload', requireAuth, async (req, res) => {
     summary: {
       subjectId: targetSubjectId,
       bookId: targetBook?._id,
+      bookTitle: targetBook?.title,
       insertedCount,
       skippedDuplicates,
+      linkedExistingCount,
       totalSubmitted: questions.length,
       status: publishImmediately ? 'published' : 'draft'
     }

@@ -1201,7 +1201,8 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   const navigate = useNavigate();
 
   const fetchHomeData = () => {
-    fetch('/api/status')
+    const t = Date.now();
+    fetch(`/api/status?t=${t}`)
       .then(r => r.json())
       .then(d => {
         if (d?.stats) {
@@ -1211,7 +1212,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       })
       .catch(() => {});
 
-    fetch('/api/subjects')
+    fetch(`/api/subjects?t=${t}`)
       .then(r => r.json())
       .then(d => {
         const list = d.data || [];
@@ -1221,7 +1222,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       })
       .catch(() => setLoading(false));
 
-    fetch('/api/books')
+    fetch(`/api/books?t=${t}`)
       .then(r => r.json())
       .then(d => {
         const list = d.data || [];
@@ -1230,7 +1231,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       })
       .catch(() => {});
 
-    fetch('/api/exams/recent')
+    fetch(`/api/exams/recent?t=${t}`)
       .then(r => r.json())
       .then(d => setRecentExams(d.data || []))
       .catch(() => {});
@@ -3593,6 +3594,16 @@ function AdminPanel({ adminUser, setAdminUser }) {
   const [subjectToDelete, setSubjectToDelete] = useState(null);
   const [isDeletingSubject, setIsDeletingSubject] = useState(false);
 
+  // Book Modals & Forms
+  const [isCreatingBook, setIsCreatingBook] = useState(false);
+  const [newBookForm, setNewBookForm] = useState({
+    title: '', subjectId: '', author: '', edition: '', programOrClass: 'BSCS', semester: '5th', language: 'en', status: 'published', description: ''
+  });
+  const [editingBook, setEditingBook] = useState(null);
+  const [editBookForm, setEditBookForm] = useState({
+    title: '', subjectId: '', author: '', edition: '', programOrClass: '', semester: '', language: 'en', status: 'published', description: ''
+  });
+
   // JSON & File Upload States
   const [uploadMode, setUploadMode] = useState('json'); // 'json' or 'file'
   const [uploadFile, setUploadFile] = useState(null);
@@ -3600,7 +3611,10 @@ function AdminPanel({ adminUser, setAdminUser }) {
   const [uploadSubjectId, setUploadSubjectId] = useState('');
   const [isNewSubjectUpload, setIsNewSubjectUpload] = useState(false);
   const [newSubjectForUpload, setNewSubjectForUpload] = useState({ name: '', programOrClass: 'BSCS', code: '' });
+  const [uploadBookChoice, setUploadBookChoice] = useState('auto'); // 'auto', existing bookId, or 'new'
   const [uploadBookTitle, setUploadBookTitle] = useState('');
+  const [uploadBookAuthor, setUploadBookAuthor] = useState('');
+  const [uploadBookEdition, setUploadBookEdition] = useState('');
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [randomizeOptions, setRandomizeOptions] = useState(true);
   const [preview, setPreview] = useState(null);
@@ -3614,10 +3628,11 @@ function AdminPanel({ adminUser, setAdminUser }) {
     setDataLoading(true);
     try {
       const headers = getAuthHeaders();
+      const t = Date.now();
       const [statsRes, subRes, booksRes] = await Promise.all([
-        fetch('/api/admin/stats', { headers, credentials: 'include' }),
-        fetch('/api/admin/subjects', { headers, credentials: 'include' }),
-        fetch('/api/admin/books', { headers, credentials: 'include' })
+        fetch(`/api/admin/stats?t=${t}`, { headers, credentials: 'include' }),
+        fetch(`/api/admin/subjects?t=${t}`, { headers, credentials: 'include' }),
+        fetch(`/api/admin/books?t=${t}`, { headers, credentials: 'include' })
       ]);
 
       // If token is expired or unauthorized, reset zombie session immediately
@@ -3644,7 +3659,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
       } else {
         // Fallback to public subjects endpoint if needed
         try {
-          const pubRes = await fetch('/api/subjects');
+          const pubRes = await fetch(`/api/subjects?t=${t}`);
           if (pubRes.ok) {
             const pubData = await pubRes.json();
             if (pubData.data?.length > 0) {
@@ -3659,7 +3674,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
         setBooks(d.data || []);
       } else {
         try {
-          const pubBooksRes = await fetch('/api/books');
+          const pubBooksRes = await fetch(`/api/books?t=${t}`);
           if (pubBooksRes.ok) {
             const pubBooksData = await pubBooksRes.json();
             if (pubBooksData.data?.length > 0) setBooks(pubBooksData.data);
@@ -3880,6 +3895,85 @@ function AdminPanel({ adminUser, setAdminUser }) {
     }
   };
 
+  const handleOpenEditBook = (book) => {
+    setEditingBook(book);
+    setEditBookForm({
+      title: book.title || '',
+      subjectId: book.subjectId?._id || book.subjectId || '',
+      author: book.author || '',
+      edition: book.edition || '',
+      programOrClass: book.programOrClass || '',
+      semester: book.semester || '',
+      language: book.language || 'en',
+      status: book.status || 'published',
+      description: book.description || ''
+    });
+  };
+
+  const handleUpdateBook = async (e) => {
+    e.preventDefault();
+    if (!editingBook) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/books/${editingBook._id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(editBookForm)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusMsg(`Reference book "${data.data.title}" updated successfully!`);
+        setEditingBook(null);
+        refreshAdminData();
+      } else {
+        alert(data.message || 'Failed to update book');
+      }
+    } catch (err) {
+      alert('Error updating book: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateBook = async (e) => {
+    e.preventDefault();
+    if (!newBookForm.title.trim()) {
+      alert('Please enter a reference book title');
+      return;
+    }
+    const targetSubId = newBookForm.subjectId || uploadSubjectId || (subjects[0]?._id);
+    if (!targetSubId) {
+      alert('Please select an academic subject for this book');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/books', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ ...newBookForm, subjectId: targetSubId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusMsg(`Reference book "${data.data.title}" created successfully!`);
+        setIsCreatingBook(false);
+        setNewBookForm({
+          title: '', subjectId: '', author: '', edition: '', programOrClass: 'BSCS', semester: '5th', language: 'en', status: 'published', description: ''
+        });
+        refreshAdminData();
+        setActiveTab('books');
+      } else {
+        alert(data.message || 'Failed to create book');
+      }
+    } catch (err) {
+      alert('Error creating book: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- JSON / FILE BULK UPLOAD ACTIONS ---
   const handlePreviewUpload = async (e) => {
     e.preventDefault();
@@ -3917,8 +4011,9 @@ function AdminPanel({ adminUser, setAdminUser }) {
         const data = await res.json();
         if (data.success) {
           setPreview(data.preview);
-          if (data.preview.metadata?.book && !uploadBookTitle) {
+          if (data.preview.metadata?.book) {
             setUploadBookTitle(data.preview.metadata.book);
+            setUploadBookChoice('new');
           }
         } else {
           alert(data.message || 'Validation failed');
@@ -3944,8 +4039,9 @@ function AdminPanel({ adminUser, setAdminUser }) {
         const data = await res.json();
         if (data.success) {
           setPreview(data.preview);
-          if (data.preview.metadata?.book && !uploadBookTitle) {
+          if (data.preview.metadata?.book) {
             setUploadBookTitle(data.preview.metadata.book);
+            setUploadBookChoice('new');
           }
         } else {
           alert(data.message || 'Validation failed');
@@ -3967,14 +4063,28 @@ function AdminPanel({ adminUser, setAdminUser }) {
     setLoading(true);
     try {
       const selectedSubObj = subjects.find(s => s._id === uploadSubjectId);
+      const targetSubId = isNewSubjectUpload ? null : (selectedSubObj?._id || preview.subjectResolution?.subject?._id || null);
+
+      let bookIdToPass = null;
+      let bookTitleToPass = uploadBookTitle;
+
+      if (uploadBookChoice && uploadBookChoice !== 'auto' && uploadBookChoice !== 'new') {
+        bookIdToPass = uploadBookChoice;
+        const matchingBook = books.find(b => b._id === uploadBookChoice);
+        if (matchingBook) bookTitleToPass = matchingBook.title;
+      }
+
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
-          subjectId: isNewSubjectUpload ? null : (selectedSubObj?._id || preview.subjectResolution?.subject?._id || null),
+          subjectId: targetSubId,
           createNewSubject: isNewSubjectUpload ? newSubjectForUpload : (!uploadSubjectId && !preview.subjectResolution?.subject ? { name: preview.filename } : null),
-          bookTitle: uploadBookTitle,
+          bookId: bookIdToPass,
+          bookTitle: bookTitleToPass,
+          bookAuthor: uploadBookAuthor,
+          bookEdition: uploadBookEdition,
           questions: preview.stagedPayload,
           publishImmediately,
           randomizeOptions
@@ -3983,12 +4093,16 @@ function AdminPanel({ adminUser, setAdminUser }) {
       const data = await res.json();
       if (data.success) {
         setStatusMsg(
-          `Successfully committed ${data.summary.insertedCount} MCQs to database! (${data.summary.skippedDuplicates} duplicates automatically skipped).`
+          `Successfully committed ${data.summary.insertedCount} MCQs to database! Linked to Book: "${data.summary.bookTitle || 'Academic Reference Book'}" (${data.summary.skippedDuplicates} duplicates handled).`
         );
         setPreview(null);
         setUploadFile(null);
+        setUploadBookTitle('');
+        setUploadBookAuthor('');
+        setUploadBookEdition('');
+        setUploadBookChoice('auto');
         refreshAdminData();
-        setActiveTab('dashboard');
+        setActiveTab('books');
       } else {
         alert(data.message || 'Commit failed');
       }
@@ -4194,6 +4308,25 @@ function AdminPanel({ adminUser, setAdminUser }) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark transition shadow-2xs"
           >
             <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Add Subject</span>
+          </button>
+          <button
+            onClick={() => {
+              setNewBookForm({
+                title: '',
+                subjectId: uploadSubjectId || (subjects[0]?._id || ''),
+                author: '',
+                edition: '',
+                programOrClass: 'BSCS',
+                semester: '5th',
+                language: 'en',
+                status: 'published',
+                description: ''
+              });
+              setIsCreatingBook(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition shadow-2xs"
+          >
+            <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Add Book</span>
           </button>
           <button
             onClick={refreshAdminData}
@@ -4764,16 +4897,90 @@ function AdminPanel({ adminUser, setAdminUser }) {
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Reference Book / Syllabus Title (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Operating System Concepts (9th Edition)"
-                    value={uploadBookTitle}
-                    onChange={e => setUploadBookTitle(e.target.value)}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 text-xs"
-                  />
-                </div>
+                {(() => {
+                  const subjectBooks = books.filter(b => {
+                    const bSubId = b.subjectId?._id ? String(b.subjectId._id) : String(b.subjectId || '');
+                    return bSubId === String(uploadSubjectId);
+                  });
+
+                  return (
+                    <div className="space-y-2 pt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-semibold text-slate-700">
+                          Target Reference Book
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {subjectBooks.length} existing textbook{subjectBooks.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+
+                      <select
+                        value={uploadBookChoice}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setUploadBookChoice(val);
+                          if (val !== 'new' && val !== 'auto') {
+                            const bObj = books.find(b => b._id === val);
+                            if (bObj) {
+                              setUploadBookTitle(bObj.title);
+                              setUploadBookAuthor(bObj.author || '');
+                              setUploadBookEdition(bObj.edition || '');
+                            }
+                          } else if (val === 'new') {
+                            setUploadBookTitle('');
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 text-xs bg-white font-medium text-slate-800"
+                      >
+                        <option value="auto">⚡ Auto-Detect Book from File / Link to Subject Syllabus</option>
+                        {subjectBooks.map(b => (
+                          <option key={b._id} value={b._id}>
+                            📖 Add to Existing: {b.title} ({b.questionCount || 0} MCQs)
+                          </option>
+                        ))}
+                        <option value="new">➕ Specify / Create New Book Title</option>
+                      </select>
+
+                      {(uploadBookChoice === 'new' || uploadBookChoice === 'auto' || uploadBookTitle) && (
+                        <div className="space-y-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Book Title</label>
+                            <input
+                              type="text"
+                              placeholder={uploadBookChoice === 'new' ? 'Enter New Reference Book Title *' : 'Book Title (pre-filled if detected in file)'}
+                              value={uploadBookTitle}
+                              onChange={e => setUploadBookTitle(e.target.value)}
+                              className="w-full px-3 py-1.5 sm:py-2 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-semibold text-slate-800"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Author (Optional)</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Silberschatz / Pressman"
+                                value={uploadBookAuthor}
+                                onChange={e => setUploadBookAuthor(e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Edition (Optional)</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. 10th Edition"
+                                value={uploadBookEdition}
+                                onChange={e => setUploadBookEdition(e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Step 2: JSON or File Input */}
@@ -5137,6 +5344,25 @@ function AdminPanel({ adminUser, setAdminUser }) {
               <h2 className="text-sm sm:text-base font-bold text-slate-900">Academic Books & Syllabi</h2>
               <p className="text-[11px] sm:text-xs text-slate-500">Manage course textbooks, authors, and syllabus chapters</p>
             </div>
+            <button
+              onClick={() => {
+                setNewBookForm({
+                  title: '',
+                  subjectId: uploadSubjectId || (subjects[0]?._id || ''),
+                  author: '',
+                  edition: '',
+                  programOrClass: 'BSCS',
+                  semester: '5th',
+                  language: 'en',
+                  status: 'published',
+                  description: ''
+                });
+                setIsCreatingBook(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark transition shadow-2xs self-start sm:self-auto cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" /> <span>Add Reference Book</span>
+            </button>
           </div>
 
           {dataLoading && books.length === 0 ? (
@@ -5171,8 +5397,15 @@ function AdminPanel({ adminUser, setAdminUser }) {
                     <div className="flex items-center gap-2">
                       <span className="capitalize font-semibold text-emerald-700">{b.status}</span>
                       <button
+                        onClick={() => handleOpenEditBook(b)}
+                        className="p-1 rounded text-slate-400 hover:text-brand-navy hover:bg-slate-100 transition cursor-pointer"
+                        title={`Edit book "${b.title}"`}
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => handleDeleteBook(b)}
-                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
                         title={`Delete book "${b.title}"`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -5531,6 +5764,314 @@ function AdminPanel({ adminUser, setAdminUser }) {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+       * MODAL: ADD NEW REFERENCE BOOK
+       * ================================================================== */}
+      {isCreatingBook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-brand-navy" />
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">Add Academic Reference Book</h3>
+              </div>
+              <button
+                onClick={() => setIsCreatingBook(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBook} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Book Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Operating System Concepts"
+                  value={newBookForm.title}
+                  onChange={e => setNewBookForm({ ...newBookForm, title: e.target.value })}
+                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-brand-navy"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Associated Academic Subject *</label>
+                <select
+                  required
+                  value={newBookForm.subjectId}
+                  onChange={e => {
+                    const selSub = subjects.find(s => s._id === e.target.value);
+                    setNewBookForm({
+                      ...newBookForm,
+                      subjectId: e.target.value,
+                      programOrClass: selSub?.programOrClass || newBookForm.programOrClass,
+                      semester: selSub?.semester || newBookForm.semester
+                    });
+                  }}
+                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white"
+                >
+                  <option value="">-- Select Subject --</option>
+                  {subjects.map(s => (
+                    <option key={s._id} value={s._id}>
+                      {s.name} ({s.programOrClass || 'General'} {s.semester})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Author(s)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Abraham Silberschatz, Peter Baer Galvin"
+                    value={newBookForm.author}
+                    onChange={e => setNewBookForm({ ...newBookForm, author: e.target.value })}
+                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Edition</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 10th Edition"
+                    value={newBookForm.edition}
+                    onChange={e => setNewBookForm({ ...newBookForm, edition: e.target.value })}
+                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. BSCS"
+                    value={newBookForm.programOrClass}
+                    onChange={e => setNewBookForm({ ...newBookForm, programOrClass: e.target.value })}
+                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 5th"
+                    value={newBookForm.semester}
+                    onChange={e => setNewBookForm({ ...newBookForm, semester: e.target.value })}
+                    className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
+                  <select
+                    value={newBookForm.language}
+                    onChange={e => setNewBookForm({ ...newBookForm, language: e.target.value })}
+                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                  >
+                    <option value="en">English</option>
+                    <option value="ur">Urdu</option>
+                    <option value="bilingual">Bilingual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
+                  <select
+                    value={newBookForm.status}
+                    onChange={e => setNewBookForm({ ...newBookForm, status: e.target.value })}
+                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus Chapters</label>
+                <textarea
+                  rows={2}
+                  value={newBookForm.description}
+                  onChange={e => setNewBookForm({ ...newBookForm, description: e.target.value })}
+                  placeholder="e.g. Chapters 1-12 covering Processes, CPU Scheduling, Deadlocks, Memory Management..."
+                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingBook(false)}
+                  className="px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-1.5 sm:py-2 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-2xs disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? 'Creating...' : 'Create Reference Book'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+       * MODAL: EDIT REFERENCE BOOK
+       * ================================================================== */}
+      {editingBook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <div className="flex items-center gap-2">
+                <Edit className="w-4 h-4 text-brand-navy" />
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">Update Book: {editingBook.title}</h3>
+              </div>
+              <button
+                onClick={() => setEditingBook(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateBook} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Book Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={editBookForm.title}
+                  onChange={e => setEditBookForm({ ...editBookForm, title: e.target.value })}
+                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-brand-navy"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Associated Academic Subject</label>
+                <select
+                  value={editBookForm.subjectId}
+                  onChange={e => setEditBookForm({ ...editBookForm, subjectId: e.target.value })}
+                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white"
+                >
+                  <option value="">-- Retain Current Subject --</option>
+                  {subjects.map(s => (
+                    <option key={s._id} value={s._id}>
+                      {s.name} ({s.programOrClass || 'General'} {s.semester})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Author(s)</label>
+                  <input
+                    type="text"
+                    value={editBookForm.author}
+                    onChange={e => setEditBookForm({ ...editBookForm, author: e.target.value })}
+                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Edition</label>
+                  <input
+                    type="text"
+                    value={editBookForm.edition}
+                    onChange={e => setEditBookForm({ ...editBookForm, edition: e.target.value })}
+                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
+                  <input
+                    type="text"
+                    value={editBookForm.programOrClass}
+                    onChange={e => setEditBookForm({ ...editBookForm, programOrClass: e.target.value })}
+                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
+                  <input
+                    type="text"
+                    value={editBookForm.semester}
+                    onChange={e => setEditBookForm({ ...editBookForm, semester: e.target.value })}
+                    className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
+                  <select
+                    value={editBookForm.language}
+                    onChange={e => setEditBookForm({ ...editBookForm, language: e.target.value })}
+                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                  >
+                    <option value="en">English</option>
+                    <option value="ur">Urdu</option>
+                    <option value="bilingual">Bilingual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
+                  <select
+                    value={editBookForm.status}
+                    onChange={e => setEditBookForm({ ...editBookForm, status: e.target.value })}
+                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus Chapters</label>
+                <textarea
+                  rows={2}
+                  value={editBookForm.description}
+                  onChange={e => setEditBookForm({ ...editBookForm, description: e.target.value })}
+                  placeholder="Outline syllabus topics or chapters..."
+                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingBook(null)}
+                  className="px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-1.5 sm:py-2 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-2xs disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
