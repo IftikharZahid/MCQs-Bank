@@ -21,18 +21,23 @@ async function seed() {
   const email = (process.env.INITIAL_ADMIN_EMAIL || 'admin@iftikharzahid.me').toLowerCase();
   const password = process.env.INITIAL_ADMIN_PASSWORD || 'Admin@123456';
 
+  const passwordHash = await bcrypt.hash(password, 12);
   let admin = await AdminUser.findOne({ email });
   if (!admin) {
-    const passwordHash = await bcrypt.hash(password, 12);
     admin = await AdminUser.create({
       name: 'Super Administrator',
       email,
       passwordHash,
-      role: 'super_admin'
+      role: 'super_admin',
+      isActive: true
     });
     console.log('Created Super Admin:', email);
   } else {
-    console.log('Super Admin already exists:', email);
+    admin.passwordHash = passwordHash;
+    admin.isActive = true;
+    admin.role = 'super_admin';
+    await admin.save();
+    console.log('Updated Super Admin password & status:', email);
   }
 
   // Seed initial sample academic subject, book & bilingual MCQs if database is empty

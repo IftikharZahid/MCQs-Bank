@@ -302,8 +302,8 @@ router.post('/admin/login', async (req, res) => {
   if (!user || !(await user.verifyPassword(password))) {
     return res.status(401).json({ success: false, message: 'Invalid email or password' });
   }
-  const token = jwt.sign({ sub: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
-  res.cookie('qb_admin_token', token, { httpOnly: true, sameSite: 'lax', maxAge: 8 * 3600 * 1000 });
+  const token = jwt.sign({ sub: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  res.cookie('qb_admin_token', token, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 3600 * 1000 });
   res.json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
 });
 

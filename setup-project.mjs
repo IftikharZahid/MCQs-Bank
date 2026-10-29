@@ -12,6 +12,7 @@ const files = {
     version: '1.0.0',
     private: true,
     scripts: {
+      'dev': 'node scripts/dev.mjs',
       'install:all': 'npm install && cd backend && npm install && cd ../frontend && npm install',
       'dev:backend': 'cd backend && npm run dev',
       'dev:frontend': 'cd frontend && npm run dev',

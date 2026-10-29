@@ -3427,20 +3427,51 @@ function AdminPanel({ adminUser, setAdminUser }) {
         fetch('/api/admin/books', { headers, credentials: 'include' })
       ]);
 
+      // If token is expired or unauthorized, reset zombie session immediately
+      if (statsRes.status === 401 || subRes.status === 401 || booksRes.status === 401) {
+        console.warn('[Admin] Session expired (401). Clearing stale session.');
+        localStorage.removeItem('qb_admin_token');
+        localStorage.removeItem('qb_admin_user');
+        setAdminUser(null);
+        setAuthError('Your administrator session has expired. Please sign in again.');
+        return;
+      }
+
       if (statsRes.ok) {
         const d = await statsRes.json();
         setStats(d.stats);
       }
       if (subRes.ok) {
         const d = await subRes.json();
-        setSubjects(d.data || []);
-        if (d.data?.length > 0 && !uploadSubjectId) {
-          setUploadSubjectId(d.data[0]._id);
+        const loadedSubs = d.data || [];
+        setSubjects(loadedSubs);
+        if (loadedSubs.length > 0 && !uploadSubjectId) {
+          setUploadSubjectId(loadedSubs[0]._id);
         }
+      } else {
+        // Fallback to public subjects endpoint if needed
+        try {
+          const pubRes = await fetch('/api/subjects');
+          if (pubRes.ok) {
+            const pubData = await pubRes.json();
+            if (pubData.data?.length > 0) {
+              setSubjects(pubData.data);
+              if (!uploadSubjectId) setUploadSubjectId(pubData.data[0]._id);
+            }
+          }
+        } catch (_) {}
       }
       if (booksRes.ok) {
         const d = await booksRes.json();
         setBooks(d.data || []);
+      } else {
+        try {
+          const pubBooksRes = await fetch('/api/books');
+          if (pubBooksRes.ok) {
+            const pubBooksData = await pubBooksRes.json();
+            if (pubBooksData.data?.length > 0) setBooks(pubBooksData.data);
+          }
+        } catch (_) {}
       }
     } catch (err) {
       console.error('Failed to refresh admin data:', err);
@@ -3834,6 +3865,20 @@ function AdminPanel({ adminUser, setAdminUser }) {
               <div className="flex-1 leading-relaxed">{authError}</div>
             </div>
           )}
+
+          <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-slate-800 text-[11px]">Super Administrator Credentials:</p>
+              <p className="font-mono text-[10px] sm:text-[11px] text-blue-700">admin@mqsbank.com</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setEmail('admin@mqsbank.com'); setPassword('Admin@MCQsBank2026!'); setAuthError(''); }}
+              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-medium text-[11px] transition shadow-2xs cursor-pointer"
+            >
+              Auto-Fill
+            </button>
+          </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -4235,7 +4280,22 @@ function AdminPanel({ adminUser, setAdminUser }) {
             </div>
           )}
         </div>
-        ) : null
+        ) : (
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-8 text-center space-y-4 shadow-2xs">
+            <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
+            <h3 className="text-sm font-bold text-slate-800">Governance Analytics Unavailable</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Curriculum analytics could not be retrieved from the server. Please verify your connection or click retry.
+            </p>
+            <button
+              onClick={refreshAdminData}
+              className="px-4 py-2 bg-brand-navy hover:bg-brand-navyDark text-white text-xs font-semibold rounded-xl inline-flex items-center gap-2 transition"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Loading</span>
+            </button>
+          </div>
+        )
       )}
 
       {/* ====================================================================
@@ -5465,20 +5525,34 @@ export default function App() {
   // Verify auth session on initial load
   useEffect(() => {
     const token = localStorage.getItem('qb_admin_token');
+    if (!token) {
+      localStorage.removeItem('qb_admin_user');
+      setAdminUser(null);
+      return;
+    }
+
     fetch('/api/admin/me', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: { Authorization: `Bearer ${token}` },
       credentials: 'include'
     })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) throw new Error('Unauthorized');
+        return r.json();
+      })
       .then(d => {
         if (d?.user) {
           setAdminUser(d.user);
           localStorage.setItem('qb_admin_user', JSON.stringify(d.user));
-        } else if (!token) {
-          setAdminUser(null);
+        } else {
+          throw new Error('Invalid user payload');
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // Token is invalid or expired - clean zombie state immediately
+        localStorage.removeItem('qb_admin_token');
+        localStorage.removeItem('qb_admin_user');
+        setAdminUser(null);
+      });
   }, []);
 
   const [studentUser, setStudentUser] = useState(() => {
