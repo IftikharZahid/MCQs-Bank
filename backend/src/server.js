@@ -27,7 +27,10 @@ if (process.platform === 'win32' && !process.env.VERCEL) {
 }
 
 const app = express();
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 
 const allowedOrigins = [
   'http://localhost:5173',

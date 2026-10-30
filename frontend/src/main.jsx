@@ -51,14 +51,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// Ensure clean, stable execution across all mobile browsers without stale worker crashes
-if ('serviceWorker' in navigator) {
+// Ensure clean, stable execution without service worker claiming loops
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  }).catch(() => {});
-}
-if ('caches' in window) {
-  caches.keys().then(keys => {
-    keys.forEach(k => caches.delete(k));
+    regs.forEach(reg => reg.unregister().catch(() => {}));
   }).catch(() => {});
 }

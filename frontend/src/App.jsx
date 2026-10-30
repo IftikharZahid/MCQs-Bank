@@ -1301,20 +1301,20 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   };
 
   useEffect(() => {
-    dispatch(fetchCatalogData());
     fetchHomeData();
 
-    const handleSync = () => {
+    const handleProgressSync = () => {
       setProgressData(getStudentProgressData());
+    };
+    const handleCatalogSync = () => {
       dispatch(fetchCatalogData({ force: true }));
     };
-    window.addEventListener('academic_progress_updated', handleSync);
-    window.addEventListener('academic_catalog_updated', handleSync);
-    window.addEventListener('storage', handleSync);
+
+    window.addEventListener('academic_progress_updated', handleProgressSync);
+    window.addEventListener('academic_catalog_updated', handleCatalogSync);
     return () => {
-      window.removeEventListener('academic_progress_updated', handleSync);
-      window.removeEventListener('academic_catalog_updated', handleSync);
-      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('academic_progress_updated', handleProgressSync);
+      window.removeEventListener('academic_catalog_updated', handleCatalogSync);
     };
   }, [dispatch]);
 
