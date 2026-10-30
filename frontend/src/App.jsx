@@ -2706,6 +2706,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
   const answers = useSelector(selectExamAnswers);
   const currentExamIndex = useSelector(selectCurrentExamIndex);
   const skippedQuestions = useSelector(selectSkippedIds);
+  const skippedSet = useMemo(() => new Set(Array.isArray(skippedQuestions) ? skippedQuestions : []), [skippedQuestions]);
   const secondsLeft = useSelector(selectExamSecondsLeft);
   const transcript = useSelector(selectExamTranscript);
   const examStatus = useSelector(selectExamStatus);
@@ -3127,7 +3128,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
     const secs = secondsLeft % 60;
     const currentQ = session.questions[currentExamIndex];
     const answeredCount = Object.keys(answers).length;
-    const skippedCount = Array.from(skippedQuestions).filter(id => answers[id] === undefined).length;
+    const skippedCount = Array.from(skippedSet).filter(id => answers[id] === undefined).length;
     const unansweredCount = session.questions.length - answeredCount;
     const progressPct = Math.round((answeredCount / session.questions.length) * 100);
 
@@ -3204,7 +3205,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
             {session.questions.map((q, idx) => {
               const isCurrent = idx === currentExamIndex;
               const isAnswered = answers[q._id] !== undefined;
-              const isSkipped = skippedQuestions.has(q._id) && !isAnswered;
+              const isSkipped = skippedSet.has(q._id) && !isAnswered;
 
               let btnStyle = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/90 font-bold shadow-2xs';
               if (isAnswered) {
@@ -3223,7 +3224,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
                   key={q._id || idx}
                   type="button"
                   data-active={isCurrent ? 'true' : undefined}
-                  onClick={() => setCurrentExamIndex(idx)}
+                  onClick={() => dispatch(setCurrentIndex(idx))}
                   className={`shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full text-[11px] sm:text-xs flex items-center justify-center transition active:scale-95 ${btnStyle}`}
                   title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : isSkipped ? ' (Skipped)' : ''}`}
                 >
@@ -3352,7 +3353,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
                       setShowSubmitModal(false);
                       const firstUnanswered = session.questions.findIndex(q => answers[q._id] === undefined);
                       if (firstUnanswered !== -1) {
-                        setCurrentExamIndex(firstUnanswered);
+                        dispatch(setCurrentIndex(firstUnanswered));
                       }
                     }}
                     className="w-full sm:flex-1 py-2.5 px-3 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs transition"
