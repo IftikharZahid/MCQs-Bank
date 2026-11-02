@@ -67,6 +67,15 @@ async function syncDatabases() {
 
   // 3. Sync Questions
   console.log('\n--- 3. Synchronizing Questions ---');
+
+  // Purge any outdated Visual Programming questions from cluster0 so it matches mcqsbank-db
+  const vpSubId = new mongoose.Types.ObjectId('6ad2e9faf4302e6a145fd6f3');
+  const vpBookId = new mongoose.Types.ObjectId('6ad2f5eee1dac5c428c6d8ef');
+  const purgedOldVP = await dbOld.collection('questions').deleteMany({
+    $or: [{ subjectId: vpSubId }, { bookId: vpBookId }]
+  });
+  console.log(`Purged ${purgedOldVP.deletedCount} outdated VP questions from cluster0.`);
+
   const qNew = await dbNew.collection('questions').find({}).toArray();
   const qOld = await dbOld.collection('questions').find({}).toArray();
 
