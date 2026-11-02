@@ -51,9 +51,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// Ensure clean, stable execution without service worker claiming loops
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister().catch(() => {}));
-  }).catch(() => {});
+// Register Service Worker cleanly for Mobile PWA, WebAPK, and offline support
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        reg.update().catch(() => {});
+      })
+      .catch((err) => {
+        console.warn('[PWA] Service Worker registration failed (non-critical):', err);
+      });
+  });
 }

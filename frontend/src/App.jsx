@@ -57,7 +57,7 @@ import {
   Smartphone, QrCode, ExternalLink, Cpu, Database, Network, Boxes, Trophy,
   HelpCircle, ArrowRight, Bell, Home, CheckSquare, Chrome, Monitor,
   User, UserCheck, ChevronDown, Hash, School, ChevronLeft, SkipForward, RotateCcw, AlertTriangle,
-  Mail, Lock
+  Mail, Lock, Share2
 } from 'lucide-react';
 import QuestionCard from './components/QuestionCard.jsx';
 
@@ -443,6 +443,14 @@ function Navbar({
   const location = useLocation();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
+  const notificationsRef = useRef(null);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(() => {
+    try {
+      return localStorage.getItem('portal_notifications_read') !== 'true';
+    } catch {
+      return true;
+    }
+  });
   const [showSearchPopup, setShowSearchPopup] = useState(false);
   const [showStudentMenu, setShowStudentMenu] = useState(false);
   const studentMenuRef = useRef(null);
@@ -457,6 +465,9 @@ function Navbar({
       if (studentMenuRef.current && !studentMenuRef.current.contains(e.target)) {
         setShowStudentMenu(false);
       }
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setShowNotifications(false);
+      }
     };
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -466,7 +477,7 @@ function Navbar({
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('touchstart', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick, { passive: true });
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
@@ -474,6 +485,19 @@ function Navbar({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  const handleToggleNotifications = () => {
+    setShowSearchPopup(false);
+    setShowStudentMenu(false);
+    setShowNotifications(prev => {
+      const next = !prev;
+      if (next) {
+        setHasUnreadNotifications(false);
+        try { localStorage.setItem('portal_notifications_read', 'true'); } catch (_) {}
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     setShowSearchPopup(false);
@@ -730,25 +754,27 @@ function Navbar({
           </div>
 
           {/* Notifications Bell with unread dot */}
-          <div className="relative">
+          <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-slate-200 transition relative active:scale-95"
+              onClick={handleToggleNotifications}
+              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-slate-200 transition relative active:scale-95 cursor-pointer"
               title="Portal Notifications"
             >
               <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-200" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-[#0B1536]" />
+              {hasUnreadNotifications && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0B1536]" />
+              )}
             </button>
 
             {/* Notification Popover Dropdown (Mobile Viewport Safe) */}
             {showNotifications && (
               <>
                 <div
-                  className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px]"
+                  className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[1px]"
                   onClick={() => setShowNotifications(false)}
                 />
-                <div className="fixed inset-x-3 top-14 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-slate-900 border border-slate-700/90 rounded-2xl p-3.5 sm:p-4 shadow-2xl z-50 text-left animate-in fade-in max-h-[85vh] overflow-y-auto">
+                <div className="fixed inset-x-2.5 top-13 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-[calc(100vw-1.25rem)] sm:w-84 max-w-sm bg-slate-900 border border-slate-700/90 rounded-2xl p-3 sm:p-4 shadow-2xl z-50 text-left animate-in fade-in max-h-[85dvh] overflow-y-auto">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                     <div className="flex items-center gap-1.5 font-bold text-xs text-white">
                       <Bell className="w-3.5 h-3.5 text-amber-400" />
@@ -759,13 +785,32 @@ function Navbar({
                     </button>
                   </div>
                   <div className="py-2.5 space-y-2 text-xs text-slate-300">
-                    <div className="p-2 rounded-xl bg-white/5 border border-white/5">
-                      <p className="font-semibold text-white">📱 Android Companion App Ready</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Direct APK download available for offline practice on smartphones and tablets.</p>
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                      <p className="font-semibold text-white flex items-center gap-1.5">
+                        <span>📘</span>
+                        <span>Visual Programming Syllabus Added</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                        504 verified MCQs with 14 weekly curriculum modules (C# & .NET Windows Forms) by Lec. Iftikhar Zahid.
+                      </p>
                     </div>
-                    <div className="p-2 rounded-xl bg-white/5 border border-white/5">
-                      <p className="font-semibold text-white">🎓 5 Core Subjects Verified</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Computer Architecture, DBMS, Automata, OOP and more updated with full syllabus coverage.</p>
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                      <p className="font-semibold text-white flex items-center gap-1.5">
+                        <span>📱</span>
+                        <span>Android Companion App Ready</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                        Direct standalone APK download available for offline practice on smartphones and tablets.
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                      <p className="font-semibold text-white flex items-center gap-1.5">
+                        <span>🎓</span>
+                        <span>Full Syllabus Coverage Verified</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                        Database Systems, Computer Architecture, Automata, OOP, and Visual Programming updated with complete questions.
+                      </p>
                     </div>
                   </div>
                   <button
@@ -774,10 +819,10 @@ function Navbar({
                       setShowNotifications(false);
                       onOpenAppModal();
                     }}
-                    className="w-full mt-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs transition text-center flex items-center justify-center gap-1.5 shadow-sm active:scale-98 cursor-pointer"
+                    className="w-full mt-1 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold text-xs transition text-center flex items-center justify-center gap-1.5 shadow-sm active:scale-98 cursor-pointer"
                   >
-                    <Smartphone className="w-3.5 h-3.5" />
-                    <span>Get Mobile & Chrome App</span>
+                    <Smartphone className="w-3.5 h-3.5 text-slate-950" />
+                    <span>Get Mobile App & Offline PWA</span>
                   </button>
                 </div>
               </>
@@ -1119,15 +1164,28 @@ function StudentProfileModal({ isOpen, onClose, studentUser, onSave, onLogout })
 /* ==========================================================================
  * COMPACT & RESPONSIVE APP DOWNLOAD MODAL (PWA & APK)
  * ======================================================================== */
-function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
+function MobileAppModal({ onClose, onInstallChrome, isInstalled, canPromptInstall }) {
   const [activeTab, setActiveTab] = useState('chrome'); // 'chrome' | 'apk'
+  const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+  const handleShareToHomeScreen = async () => {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'MCQs Bank Portal',
+          text: 'Academic Question Bank & Examination Portal - Access MCQs, syllabus coverage, and practice quizzes.',
+          url: window.location.origin
+        });
+      } catch (_) {}
+    }
+  };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-sm sm:max-w-md w-full text-white shadow-2xl overflow-hidden relative max-h-[88vh] flex flex-col">
+      <div className="bg-slate-900 border border-slate-700/90 rounded-2xl max-w-sm sm:max-w-md w-full text-white shadow-2xl overflow-hidden relative max-h-[90dvh] flex flex-col">
         {/* Compact Header */}
         <div className="bg-[#0B1536] px-4 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -1139,13 +1197,13 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
                 <span>MCQs Bank</span>
                 <span className="text-amber-400">App</span>
               </h3>
-              <p className="text-[10px] text-slate-400">Academic Offline Practice & Shortcuts</p>
+              <p className="text-[10px] text-slate-400">Offline Practice & Home Screen Access</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1163,7 +1221,7 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
             }`}
           >
             <Chrome className="w-3.5 h-3.5" />
-            <span>Web App / PWA</span>
+            <span>Web App (PWA)</span>
           </button>
           <button
             type="button"
@@ -1189,34 +1247,59 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled }) {
                   <span>Instant Mobile & Desktop Web App</span>
                 </p>
                 <p className="text-[11px] text-slate-400 leading-snug">
-                  Zero download size. Launches instantly in full-screen standalone mode from your phone's Home Screen or Desktop shortcut.
+                  Zero download size. Launches instantly in full-screen standalone mode directly from your phone's Home Screen without browser address bars.
                 </p>
               </div>
 
               {isInstalled ? (
                 <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-center font-bold text-xs flex items-center justify-center gap-1.5">
                   <Check className="w-4 h-4 text-emerald-400" />
-                  <span>App is already installed on this device!</span>
+                  <span>App is already active in standalone mode!</span>
                 </div>
-              ) : (
+              ) : canPromptInstall ? (
                 <button
                   type="button"
                   onClick={onInstallChrome}
                   className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md transition active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Chrome className="w-4 h-4 text-slate-950" />
-                  <span>Install Web App</span>
+                  <span>Install Web App (1-Tap Setup)</span>
                 </button>
+              ) : (
+                <div className="space-y-2">
+                  {typeof navigator !== 'undefined' && navigator.share && (
+                    <button
+                      type="button"
+                      onClick={handleShareToHomeScreen}
+                      className="w-full py-2.5 px-4 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4 text-amber-400" />
+                      <span>Open Share Menu (Add to Home Screen)</span>
+                    </button>
+                  )}
+                </div>
               )}
 
-              <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/80 text-[11px] text-slate-400 space-y-1.5">
-                <p className="font-bold text-slate-300">How to install manually on mobile:</p>
-                <p className="leading-relaxed">
-                  📱 <strong className="text-slate-300">Chrome / Edge (Android):</strong> Tap menu <span className="text-amber-300 font-mono">⋮</span> &rarr; tap <strong className="text-slate-200">"Install app"</strong> or <strong className="text-slate-200">"Add to Home screen"</strong>.
+              <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/80 text-[11px] text-slate-400 space-y-2">
+                <p className="font-bold text-slate-200 flex items-center gap-1">
+                  <span>📌</span>
+                  <span>How to add to Home Screen:</span>
                 </p>
-                <p className="leading-relaxed">
-                  🍎 <strong className="text-slate-300">Safari (iPhone/iPad):</strong> Tap the Share button <span className="text-amber-300 font-mono">⎋</span> &rarr; scroll down and tap <strong className="text-slate-200">"Add to Home Screen"</strong>.
-                </p>
+                {isIOS ? (
+                  <div className="p-2 rounded-lg bg-blue-950/40 border border-blue-900/60 text-blue-200 space-y-1">
+                    <p className="font-bold text-white">🍎 iPhone / iPad (Safari):</p>
+                    <p>1. Tap the <strong>Share</strong> button <span className="font-mono bg-white/10 px-1 rounded">⎋</span> at bottom of Safari.</p>
+                    <p>2. Scroll down and tap <strong>"Add to Home Screen"</strong> <span className="font-mono bg-white/10 px-1 rounded">➕</span>.</p>
+                    <p>3. Tap <strong>Add</strong> in top-right corner to launch fullscreen.</p>
+                  </div>
+                ) : (
+                  <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300 space-y-1">
+                    <p className="font-bold text-white">📱 Android (Chrome / Edge / Samsung):</p>
+                    <p>1. Tap the three dots menu <span className="font-mono bg-white/10 px-1 rounded">⋮</span> at top-right.</p>
+                    <p>2. Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</p>
+                    <p>3. Tap <strong>Install</strong> to add icon to your phone screen.</p>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -1454,69 +1537,69 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       </section>
 
       {/* 2. SUMMARY STATS CARD (Accurate Real-Time Metrics for Both Books & Subjects) */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-2.5 sm:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 items-center text-center gap-y-2.5 sm:gap-y-0">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-3 sm:p-4">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 items-stretch text-center">
           {/* Metric 1: Reference Books */}
-          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1">
-              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1 shadow-2xs">
+              <BookOpen className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {String(status.stats?.books ?? books.length).padStart(2, '0')}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Syllabus Books
             </span>
           </div>
 
           {/* Metric 2: Academic Subjects */}
-          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1">
-              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 shadow-2xs">
+              <Layers className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {String(status.stats?.subjects ?? subjects.length).padStart(2, '0')}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Active Subjects
             </span>
           </div>
 
           {/* Metric 3: Total MCQs */}
-          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1">
-              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 shadow-2xs">
+              <HelpCircle className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {status.stats?.questions || totalBankQuestions}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Total MCQs
             </span>
           </div>
 
           {/* Metric 4: Solved MCQs by Candidate */}
-          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
-              <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 shadow-2xs">
+              <CheckSquare className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {overallStats.totalSolved}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Solved MCQs
             </span>
           </div>
 
           {/* Metric 5: Bank Solved % */}
-          <div className="flex flex-col items-center justify-center px-1 sm:px-2 py-1 sm:py-0 col-span-2 sm:col-span-1">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1">
-              <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition col-span-2 xs:col-span-1 sm:col-span-1">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 shadow-2xs">
+              <Trophy className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none">
+            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {overallStats.overallPercentage}%
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-1 leading-none text-center">
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Bank Solved
             </span>
           </div>
@@ -1859,9 +1942,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                         });
                         navigate(subId ? `/practice?subjectId=${subId}&bookId=${book._id}` : `/practice`);
                       }}
-                      className="flex-1 py-1.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition text-center cursor-pointer"
+                      className="flex-1 py-2 px-2.5 rounded-xl bg-slate-900 text-white text-[11px] sm:text-xs font-bold hover:bg-slate-800 transition text-center cursor-pointer min-h-[38px] flex items-center justify-center"
                     >
-                      Practice Book MCQs
+                      <span>Practice MCQs</span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -1876,9 +1959,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                         });
                         navigate(subId ? `/exam?subjectId=${subId}&bookId=${book._id}` : `/exam`);
                       }}
-                      className="flex-1 py-1.5 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition text-center cursor-pointer"
+                      className="flex-1 py-2 px-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-[11px] sm:text-xs font-bold hover:bg-amber-100 transition text-center cursor-pointer min-h-[38px] flex items-center justify-center"
                     >
-                      Start Exam
+                      <span>Start Exam</span>
                     </button>
                   </div>
                 </div>
@@ -1894,7 +1977,10 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
               const theme = getSubjectTheme(sub.name);
               const IconComponent = theme.icon;
               const subStats = getSubjectSolvedStats(sub._id, sub.questionCount || 0);
-              const matchingBook = books.find(b => (b.subjectId?._id || b.subjectId) === sub._id);
+              const matchingBook = books.find(b => {
+                const bSubId = b.subjectId?._id || b.subjectId;
+                return bSubId && String(bSubId) === String(sub._id);
+              });
 
               return (
                 <div
@@ -1969,9 +2055,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                         });
                         navigate(`/practice?subjectId=${sub._id}`);
                       }}
-                      className="flex-1 py-1.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition text-center cursor-pointer"
+                      className="flex-1 py-2 px-2.5 rounded-xl bg-slate-900 text-white text-[11px] sm:text-xs font-bold hover:bg-slate-800 transition text-center cursor-pointer min-h-[38px] flex items-center justify-center"
                     >
-                      Practice MCQs
+                      <span>Practice MCQs</span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -1984,9 +2070,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                         });
                         navigate(`/exam?subjectId=${sub._id}`);
                       }}
-                      className="flex-1 py-1.5 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition text-center cursor-pointer"
+                      className="flex-1 py-2 px-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-[11px] sm:text-xs font-bold hover:bg-amber-100 transition text-center cursor-pointer min-h-[38px] flex items-center justify-center"
                     >
-                      Start Exam
+                      <span>Start Exam</span>
                     </button>
                   </div>
                 </div>
@@ -6460,6 +6546,7 @@ export default function App() {
           onClose={() => setIsAppModalOpen(false)}
           onInstallChrome={handleInstallApp}
           isInstalled={isInstalled}
+          canPromptInstall={Boolean(deferredPrompt)}
         />
       )}
       <StudentProfileModal
