@@ -1758,13 +1758,17 @@ function PrintableExamSheet({ exam, exams }) {
 
   if (examList.length === 0) return null;
 
+  // Always portal into the single dedicated #print-sheet-root container in index.html
+  const portalTarget = document.getElementById('print-sheet-root');
+  if (!portalTarget) return null;
+
   // Single certificate: Standard sized full A4 sheet
   if (examList.length === 1) {
     return createPortal(
-      <div id="print-sheet-root" className="bg-white text-slate-900 font-sans p-6 leading-normal box-border">
+      <div className="bg-white text-slate-900 font-sans p-6 leading-normal box-border">
         {renderStandardExamCard(examList[0])}
       </div>,
-      document.body
+      portalTarget
     );
   }
 
@@ -1775,7 +1779,7 @@ function PrintableExamSheet({ exam, exams }) {
   }
 
   return createPortal(
-    <div id="print-sheet-root" className="bg-white text-slate-900 font-sans p-4 leading-normal box-border">
+    <div className="bg-white text-slate-900 font-sans p-4 leading-normal box-border">
       {pairs.map((pair, pairIdx) => (
         <div key={pairIdx} className="print-page-pair">
           {/* Card 1 */}
@@ -1799,7 +1803,7 @@ function PrintableExamSheet({ exam, exams }) {
         </div>
       ))}
     </div>,
-    document.body
+    portalTarget
   );
 }
 
@@ -1817,16 +1821,27 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   const [homeExploreTab, setHomeExploreTab] = useState('books'); // 'books' or 'subjects'
   const [recentExams, setRecentExams] = useState([]);
   const [progressData, setProgressData] = useState(() => getStudentProgressData());
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoadTimedOut(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
 
   const fetchHomeData = () => {
     const t = Date.now();
-    dispatch(fetchCatalogData({ force: true }));
+    // Respect TTL cache — only force-refresh if catalog is stale/empty
+    dispatch(fetchCatalogData({ force: false }));
 
-    fetch(`/api/status?t=${t}`)
+    // /api/status with 6s timeout to prevent mobile hang
+    const ctrl1 = new AbortController();
+    const t1 = setTimeout(() => ctrl1.abort(), 6000);
+    fetch(`/api/status?t=${t}`, { signal: ctrl1.signal })
       .then(r => (r.ok ? r.json() : null))
       .catch(() => null)
       .then(d => {
+        clearTimeout(t1);
         if (d?.stats) {
           setStatus(d);
           API_CACHE.status = d;
@@ -1834,10 +1849,16 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       })
       .catch(() => {});
 
-    fetch(`/api/exams/recent?t=${t}`)
+    // /api/exams/recent with 6s timeout to prevent mobile hang
+    const ctrl2 = new AbortController();
+    const t2 = setTimeout(() => ctrl2.abort(), 6000);
+    fetch(`/api/exams/recent?t=${t}`, { signal: ctrl2.signal })
       .then(r => (r.ok ? r.json() : { data: [] }))
       .catch(() => ({ data: [] }))
-      .then(d => setRecentExams(d.data || []))
+      .then(d => {
+        clearTimeout(t2);
+        setRecentExams(d.data || []);
+      })
       .catch(() => {});
   };
 
@@ -2293,7 +2314,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                 </div>
 
                 {/* Direct Action Buttons */}
-                <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 shrink-0">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-3 md:pt-0 border-t md:border-t-0 border-blue-100/80 w-full md:w-auto shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -2305,9 +2326,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                       });
                       navigate(`/practice?subjectId=${subId}`);
                     }}
-                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-brand-navy hover:bg-slate-800 text-amber-400 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 min-h-[42px] rounded-xl bg-brand-navy hover:bg-slate-800 text-amber-400 text-xs sm:text-sm font-extrabold shadow-sm transition active:scale-[0.98] cursor-pointer whitespace-nowrap"
                   >
-                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <Play className="w-3.5 h-3.5 fill-current shrink-0" />
                     <span>Resume Practice →</span>
                   </button>
 
@@ -2322,9 +2343,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
                       });
                       navigate(`/exam?subjectId=${subId}`);
                     }}
-                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-bold border border-slate-200 shadow-xs transition active:scale-95"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 min-h-[42px] rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-bold border border-slate-200 shadow-2xs transition active:scale-[0.98] cursor-pointer whitespace-nowrap"
                   >
-                    <CheckSquare className="w-3.5 h-3.5 text-purple-600" />
+                    <CheckSquare className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                     <span>Start Exam</span>
                   </button>
                 </div>
@@ -2387,11 +2408,22 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
         </div>
 
         {/* Loading State */}
-        {loading && books.length === 0 && subjects.length === 0 ? (
+        {loading && books.length === 0 && subjects.length === 0 && !loadTimedOut ? (
           <div className="py-12 bg-white rounded-2xl border border-slate-200/90 shadow-sm flex flex-col items-center justify-center text-center animate-fadeIn">
             <div className="w-9 h-9 rounded-full border-3 border-amber-400/20 border-t-amber-500 animate-spin mb-3" />
             <p className="text-xs font-bold text-slate-700">Loading Academic Question Banks...</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Retrieving verified textbooks and curriculum modules</p>
+          </div>
+        ) : books.length === 0 && subjects.length === 0 ? (
+          <div className="py-10 bg-white rounded-2xl border border-slate-200/90 p-4 text-center space-y-3">
+            <p className="text-xs font-bold text-slate-700">No question banks currently loaded</p>
+            <button
+              onClick={() => dispatch(fetchCatalogData({ force: true }))}
+              className="px-4 py-2 bg-brand-navy text-amber-400 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Connection</span>
+            </button>
           </div>
         ) : homeExploreTab === 'books' ? (
           /* ================================================================
@@ -8363,11 +8395,16 @@ export default function App() {
       return;
     }
 
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+
     fetch('/api/admin/me', {
+      signal: ctrl.signal,
       headers: { Authorization: `Bearer ${token}` },
       credentials: 'include'
     })
       .then(r => {
+        clearTimeout(timer);
         if (!r.ok) throw new Error('Unauthorized');
         return r.json();
       })
@@ -8380,11 +8417,14 @@ export default function App() {
         }
       })
       .catch(() => {
+        clearTimeout(timer);
         // Token is invalid or expired - clean zombie state immediately
         localStorage.removeItem('qb_admin_token');
         localStorage.removeItem('qb_admin_user');
         setAdminUser(null);
       });
+
+    return () => clearTimeout(timer);
   }, []);
 
   const [studentUser, setStudentUser] = useState(() => {
@@ -8434,7 +8474,7 @@ export default function App() {
         onInstallApp={handleInstallApp}
         isInstalled={isInstalled}
       />
-      <main key={location.pathname} className={`flex-1 ${isExamActive ? 'pb-2' : 'pb-16 md:pb-0'} animate-fadeIn`}>
+      <main className={`flex-1 ${isExamActive ? 'pb-2' : 'pb-16 md:pb-0'}`}>
         <Routes>
           <Route
             path="/"

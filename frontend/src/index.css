@@ -43,6 +43,17 @@ html, body {
  * ISOLATED RESULT SHEET PRINT RULES
  * ======================================================================== */
 @media print {
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   body.printing-result-sheet {
     background: #ffffff !important;
     color: #000000 !important;
@@ -96,6 +107,8 @@ html, body {
     padding: 0 !important;
     height: auto !important;
     min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
     background: #ffffff !important;
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
@@ -115,12 +128,13 @@ html, body {
   /* Display ONLY the dedicated print portal container */
   body.printing-single-result #print-sheet-root {
     display: block !important;
-    position: relative !important;
+    position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;
+    overflow: visible !important;
   }
 
   body.printing-single-result .standard-single-card {
@@ -130,11 +144,14 @@ html, body {
     break-before: avoid !important;
     break-after: avoid !important;
     break-inside: avoid !important;
+    max-height: 275mm !important;
+    box-sizing: border-box !important;
   }
 
   body.printing-single-result .print-page-pair {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    box-sizing: border-box !important;
   }
 
   body.printing-single-result .print-page-pair:not(:last-child) {
