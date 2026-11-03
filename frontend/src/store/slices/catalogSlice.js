@@ -40,15 +40,20 @@ export const fetchCatalogData = createAsyncThunk(
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const timestamp = Date.now();
+
       const [subjectsRes, booksRes] = await Promise.all([
         fetch(`/api/subjects?t=${timestamp}`, {
+          signal: controller.signal,
           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
         }),
         fetch(`/api/books?t=${timestamp}`, {
+          signal: controller.signal,
           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
         })
-      ]);
+      ]).finally(() => clearTimeout(timeoutId));
 
       const subjectsData = await subjectsRes.json().catch(() => ({ success: false, data: [] }));
       const booksData = await booksRes.json().catch(() => ({ success: false, data: [] }));

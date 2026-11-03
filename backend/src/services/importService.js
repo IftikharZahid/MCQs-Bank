@@ -48,16 +48,31 @@ export function normalizeQuestionRecord(raw, index = 0, { randomize = false } = 
     options = options.split('|').map(s => s.trim()).filter(Boolean);
   }
 
+  // Pre-process correct answer before flattening if options are objects like { id: 'A', text: '...' }
+  let correctAnswer = raw.correctAnswer ?? raw.answer ?? raw.correctIndex ?? raw.correctOpt ?? raw.correct ?? raw.correct_option_id ?? raw.correct_answer ?? raw.correctOption;
+
+  if (Array.isArray(options) && options.length > 0 && typeof options[0] === 'object' && options[0] !== null) {
+    if (raw.correct_option_id !== undefined && raw.correct_option_id !== null) {
+      const targetId = String(raw.correct_option_id).trim().toUpperCase();
+      const matchIdx = options.findIndex(o => o && String(o.id || o.key || o.letter).trim().toUpperCase() === targetId);
+      if (matchIdx !== -1) correctAnswer = matchIdx;
+    }
+    if ((correctAnswer === undefined || correctAnswer === null || typeof correctAnswer === 'string') && raw.correct_answer) {
+      const targetAns = String(raw.correct_answer).trim().toLowerCase();
+      const matchIdx = options.findIndex(o => o && String(o.text || o.value || '').trim().toLowerCase() === targetAns);
+      if (matchIdx !== -1) correctAnswer = matchIdx;
+    }
+  }
+
   // Normalize array elements to string
   if (Array.isArray(options)) {
-    options = options.map(o => (typeof o === 'object' && o !== null ? (o.text || o.value || JSON.stringify(o)) : String(o).trim()));
+    options = options.map(o => (typeof o === 'object' && o !== null ? (o.text || o.value || o.option || JSON.stringify(o)) : String(o).trim()));
   }
 
   // Extract correct answer
-  let correctAnswer = raw.correctAnswer ?? raw.answer ?? raw.correctIndex ?? raw.correctOpt ?? raw.correct;
   if (typeof correctAnswer === 'string') {
     const trimmed = correctAnswer.trim();
-    if (/^[A-D]$/i.test(trimmed)) {
+    if (/^[A-F]$/i.test(trimmed)) {
       correctAnswer = trimmed.toUpperCase().charCodeAt(0) - 65;
     } else if (/^[0-9]+$/.test(trimmed)) {
       const num = Number(trimmed);
@@ -84,7 +99,7 @@ export function normalizeQuestionRecord(raw, index = 0, { randomize = false } = 
   if (!questionText) errors.push(`Item ${index + 1}: Missing question text.`);
   if (!Array.isArray(options) || options.length < 2) errors.push(`Item ${index + 1}: At least 2 options required.`);
   if (Number.isNaN(correctAnswer) || correctAnswer < 0 || correctAnswer >= (options?.length || 0)) {
-    errors.push(`Item ${index + 1}: Correct answer (${raw.correctAnswer ?? raw.answer}) is invalid or out of bounds.`);
+    errors.push(`Item ${index + 1}: Correct answer (${raw.correctAnswer ?? raw.answer ?? raw.correct_option_id ?? raw.correct_answer}) is invalid or out of bounds.`);
   }
 
   let finalOptions = (options || []).map(o => String(o).trim());
@@ -98,6 +113,15 @@ export function normalizeQuestionRecord(raw, index = 0, { randomize = false } = 
   }
 
   const isUrdu = /[\u0600-\u06FF]/.test(questionText);
+  const rawDiff = String(raw.difficulty || '').trim().toLowerCase();
+  let normalizedDiff = 'medium';
+  if (['easy', 'basic', 'beginner', 'introductory'].includes(rawDiff)) {
+    normalizedDiff = 'easy';
+  } else if (['hard', 'advanced', 'applied', 'complex'].includes(rawDiff)) {
+    normalizedDiff = 'hard';
+  } else if (['medium', 'intermediate', 'moderate'].includes(rawDiff)) {
+    normalizedDiff = 'medium';
+  }
 
   return {
     valid: errors.length === 0,
@@ -106,13 +130,11 @@ export function normalizeQuestionRecord(raw, index = 0, { randomize = false } = 
       question: questionText,
       options: finalOptions,
       correctAnswer: finalCorrectAnswer,
-      explanation: String(raw.explanation || raw.desc || '').trim(),
+      explanation: String(raw.explanation || raw.desc || raw.rationale || '').trim(),
       chapter: String(raw.chapter || '').trim(),
-      week: String(raw.week || '').trim(),
+      week: raw.week !== undefined && raw.week !== null ? String(raw.week).trim() : '',
       topic: String(raw.topic || '').trim(),
-      difficulty: ['easy', 'medium', 'hard'].includes(String(raw.difficulty).toLowerCase())
-        ? String(raw.difficulty).toLowerCase()
-        : 'medium',
+      difficulty: normalizedDiff,
       language: raw.language || (isUrdu ? 'ur' : 'en'),
       book: String(raw.book || raw.bookTitle || raw.bookName || raw.Book || '').trim(),
       subject: String(raw.subject || raw.subjectName || raw.course || raw.Subject || '').trim()
@@ -158,11 +180,23 @@ export function parseJsonContent(content, originalName = '') {
       semester: firstWithSemester ? (firstWithSemester.semester || firstWithSemester.Semester) : null
     };
   } else if (typeof parsed === 'object' && parsed !== null) {
-    rawQuestions = parsed.questions || parsed.mcqs || parsed.data || parsed.items || [];
+    if (Array.isArray(parsed.weeks)) {
+      rawQuestions = parsed.weeks.flatMap(w =>
+        (w.questions || []).map(q => ({
+          ...q,
+          week: q.week !== undefined && q.week !== null ? q.week : w.week,
+          chapter: q.chapter || (w.week ? `Week ${w.week}: ${w.title || ''}` : (w.title || '')),
+          topic: q.topic || w.title || ''
+        }))
+      );
+    } else {
+      rawQuestions = parsed.questions || parsed.mcqs || parsed.data || parsed.items || [];
+    }
     metadata = {
-      subject: parsed.subject || parsed.subjectName || parsed.course || null,
+      subject: parsed.subject || parsed.subjectName || parsed.course || parsed.course_title || null,
+      code: parsed.course_code || parsed.code || null,
       book: parsed.book || parsed.bookTitle || parsed.bookName || null,
-      programOrClass: parsed.programOrClass || parsed.program || null,
+      programOrClass: parsed.level || parsed.programOrClass || parsed.program || null,
       semester: parsed.semester || null
     };
   }
@@ -205,9 +239,14 @@ export async function parseUploadedFile(fileBuffer, mimeType, originalName) {
 export async function resolveSubjectMatch(subjectName, programOrClass) {
   if (!subjectName) return { status: 'missing' };
   const normalizedSlug = subjectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const normalizedName = subjectName.trim().replace(/_/g, ' ');
 
   const exactMatch = await Subject.findOne({
-    $or: [{ slug: normalizedSlug }, { name: new RegExp(`^${subjectName.trim()}$`, 'i') }]
+    $or: [
+      { slug: normalizedSlug },
+      { name: new RegExp(`^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      { name: new RegExp(`^${subjectName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    ]
   });
 
   if (exactMatch) {

@@ -51,15 +51,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// Register Service Worker cleanly for Mobile PWA, WebAPK, and offline support
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then((reg) => {
-        reg.update().catch(() => {});
-      })
-      .catch((err) => {
-        console.warn('[PWA] Service Worker registration failed (non-critical):', err);
-      });
-  });
+// Register Service Worker cleanly for Mobile PWA, WebAPK, and offline support in production
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  if (import.meta.env.PROD && window.location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then((reg) => {
+          reg.update().catch(() => {});
+        })
+        .catch((err) => {
+          console.warn('[PWA] Service Worker registration failed (non-critical):', err);
+        });
+    });
+  } else {
+    // In development mode, unregister any stale service workers that could block mobile views
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister().catch(() => {});
+      }
+    }).catch(() => {});
+  }
 }

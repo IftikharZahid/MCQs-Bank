@@ -119,10 +119,10 @@ const isDirectRun = Boolean(process.argv[1] && fileURLToPath(import.meta.url).to
 
 if (isDirectRun && !isVercel) {
   connectDB().then(() => {
-    app.listen(PORT, () => console.log(`Question Bank API Server running on http://localhost:${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => console.log(`Question Bank API Server running on http://localhost:${PORT}`));
   }).catch(err => {
     console.error('Initial DB connection failure:', err.message);
-    app.listen(PORT, () => console.log(`Question Bank API Server running (degraded DB) on http://localhost:${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => console.log(`Question Bank API Server running (degraded DB) on http://localhost:${PORT}`));
   });
 } else {
   // In Vercel serverless environment, initiate connection eagerly on cold start

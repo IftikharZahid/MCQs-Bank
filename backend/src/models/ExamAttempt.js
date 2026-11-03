@@ -4,6 +4,7 @@ const examAttemptSchema = new mongoose.Schema({
   title: { type: String, required: true },
   subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
   bookId: { type: mongoose.Schema.Types.ObjectId, ref: 'Book' },
+  week: { type: String, default: '' },
   studentName: { type: String, default: 'Student Candidate' },
   studentClass: { type: String, default: '' },
   studentRollNo: { type: String, default: '' },

@@ -10,6 +10,7 @@ const subjectSchema = new mongoose.Schema({
   academicYear: { type: String, default: '2026' },
   language: { type: String, enum: ['en', 'ur', 'bilingual'], default: 'en' },
   status: { type: String, enum: ['published', 'draft', 'archived'], default: 'published', index: true },
+  bookCount: { type: Number, default: null },
   contentVersion: { type: Number, default: 1 }
 }, { timestamps: true });
 

@@ -8,6 +8,7 @@ const chapterSubSchema = new mongoose.Schema({
 
 const bookSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
+  bookNumber: { type: String, default: '' },
   subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true, index: true },
   programOrClass: { type: String, default: '' },
   semester: { type: String, default: '' },

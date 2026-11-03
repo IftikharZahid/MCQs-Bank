@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Routes, Route, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { store } from './store/index.js';
@@ -8,9 +9,7 @@ import {
   selectAllBooks,
   selectCatalogStatus,
   selectCatalogLoading,
-  selectDbConnected,
-  selectCatalogError,
-  catalogUpdated
+  selectDbConnected
 } from './store/slices/catalogSlice.js';
 import {
   startExamThunk,
@@ -33,31 +32,18 @@ import {
   selectExamError
 } from './store/slices/examSlice.js';
 import {
-  saveStudentUser,
-  logoutStudent,
-  recordQuestionSolved,
   recordExamAttempt,
-  recordRecentActivity,
-  selectStudentUser,
-  selectStudentProgress
+  recordRecentActivity
 } from './store/slices/studentSlice.js';
-import {
-  setAppModalOpen,
-  setStudentModalOpen,
-  setIsInstalled,
-  selectIsAppModalOpen,
-  selectIsStudentModalOpen,
-  selectIsInstalled
-} from './store/slices/uiSlice.js';
 import {
   BookOpen, GraduationCap, LayoutDashboard, UploadCloud, CheckCircle2,
   Clock, Printer, ShieldCheck, Search, Play, Award, PlusCircle, LogOut,
   Edit, Trash2, FileText, Check, AlertCircle, RefreshCw, Eye, EyeOff, X, Copy,
-  Download, ChevronRight, Filter, Sparkles, Layers, FolderPlus, FileCode,
-  Smartphone, QrCode, ExternalLink, Cpu, Database, Network, Boxes, Trophy,
-  HelpCircle, ArrowRight, Bell, Home, CheckSquare, Chrome, Monitor,
-  User, UserCheck, ChevronDown, Hash, School, ChevronLeft, SkipForward, RotateCcw, AlertTriangle,
-  Mail, Lock, Share2
+  Download, ChevronRight, Layers, FolderPlus, FileCode,
+  Smartphone, Cpu, Database, Network, Boxes, Trophy,
+  HelpCircle, ArrowRight, ArrowDown, Bell, Home, CheckSquare, Chrome,
+  User, UserCheck, Hash, School, ChevronLeft, SkipForward, RotateCcw, AlertTriangle,
+  Mail, Lock, Share2, Calendar
 } from 'lucide-react';
 import QuestionCard from './components/QuestionCard.jsx';
 
@@ -512,7 +498,8 @@ function Navbar({
       if (searchSubjects.length === 0) {
         setSearchLoading(true);
         fetch('/api/subjects')
-          .then(r => r.json())
+          .then(r => (r.ok ? r.json() : { data: [] }))
+          .catch(() => ({ data: [] }))
           .then(d => {
             setSearchSubjects(d.data || []);
             setSearchLoading(false);
@@ -1031,7 +1018,7 @@ function StudentProfileModal({ isOpen, onClose, studentUser, onSave, onLogout })
             <div>
               <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
                 <span>{studentUser ? 'Candidate Profile' : 'Student Login'}</span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
                   Candidate ID
                 </span>
               </h3>
@@ -1347,13 +1334,482 @@ function MobileAppModal({ onClose, onInstallChrome, isInstalled, canPromptInstal
 }
 
 /* ==========================================================================
+ * OFFICIAL ACADEMIC RESULT TRANSCRIPT COMPONENT (PRINT PORTAL)
+ * Multi-mode: 
+ * - Single certificate: Standard sized full A4 sheet
+ * - Multiple certificates for same student: 2 cards per page with academic divider
+ * ======================================================================== */
+function formatPrintExamData(exam) {
+  const examDate = new Date(exam.submittedAt || exam.createdAt || exam.startedAt || Date.now());
+  const formattedDate = !isNaN(examDate.getTime())
+    ? examDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    : 'N/A';
+  const formattedTime = !isNaN(examDate.getTime())
+    ? examDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  const totalQ = exam.summary?.totalQuestions ?? (Array.isArray(exam.items) ? exam.items.length : 0);
+  const correct = exam.summary?.correct ?? exam.summary?.obtainedMarks ?? 0;
+  const incorrect = exam.summary?.incorrect ?? Math.max(0, totalQ - correct);
+  const percentage = exam.summary?.percentage ?? (totalQ > 0 ? Math.round((correct / totalQ) * 100) : 0);
+  const passingBenchmark = exam.passingPercentage || 50;
+  const passed = exam.summary?.passed ?? (percentage >= passingBenchmark);
+  const grade = exam.summary?.grade || (passed ? 'A' : 'F');
+  const accuracy = exam.summary?.accuracyRate ?? percentage;
+  const certRef = `CERT-${(exam._id ? String(exam._id) : '000000').slice(-8).toUpperCase()}`;
+
+  return {
+    examDate,
+    formattedDate,
+    formattedTime,
+    totalQ,
+    correct,
+    incorrect,
+    percentage,
+    passingBenchmark,
+    passed,
+    grade,
+    accuracy,
+    certRef
+  };
+}
+
+function renderStandardExamCard(exam) {
+  const {
+    formattedDate,
+    formattedTime,
+    totalQ,
+    correct,
+    incorrect,
+    percentage,
+    passingBenchmark,
+    passed,
+    grade,
+    accuracy,
+    certRef
+  } = formatPrintExamData(exam);
+
+  return (
+    <div className="standard-single-card">
+      {/* Certified Transcript Header */}
+      <div className="flex items-center justify-between pb-3 mb-3.5 border-b-2 border-slate-900">
+        <div className="flex items-center gap-3.5">
+          {/* Professional Academic Emblem / Logo */}
+          <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 text-amber-400 flex items-center justify-center shadow-xs shrink-0 relative">
+            <GraduationCap className="w-7 h-7 text-amber-400 stroke-[2.2]" />
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-[9px] font-black border border-white">
+              ✓
+            </div>
+          </div>
+          <div className="leading-tight">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black text-slate-950 tracking-tight leading-none uppercase">
+                MCQs BANK
+              </h1>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest bg-slate-900 text-white px-2 py-0.5 rounded">
+                Official Transcript
+              </span>
+            </div>
+            <p className="text-xs font-black uppercase tracking-wider text-slate-800 mt-1">
+              Academic Portal
+            </p>
+            <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500 mt-0.5">
+              Higher Education Examination Assessment Division
+            </p>
+          </div>
+        </div>
+        <div className="text-right leading-tight">
+          <div className="font-mono font-bold text-xs text-slate-900 tracking-wider">
+            TRANSCRIPT REF: {certRef}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
+            Issued: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </div>
+          <div className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wide mt-0.5 flex items-center justify-end gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block"></span>
+            <span>Certified Electronic Archive</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Candidate Profile & Exam Details (Enlarged & Academic Standard) */}
+      <div className="grid grid-cols-12 gap-3.5 p-4 mb-3.5 bg-slate-50 border border-slate-300 rounded-xl">
+        <div className="col-span-6 space-y-2 pr-3.5 border-r border-slate-200">
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            Candidate Profile
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-950 tracking-tight leading-snug uppercase">
+              {exam.studentName}
+            </h2>
+            <div className="mt-2 space-y-1.5 text-xs">
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Roll Number:</span>
+                <span className="font-mono font-black text-slate-900 text-sm tracking-wide">
+                  {exam.studentRollNo || 'N/A'}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Class / Semester:</span>
+                <span className="font-black text-slate-900 text-sm">
+                  {exam.studentClass || 'N/A'}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Institution:</span>
+                <span className="font-bold text-slate-800 text-xs">
+                  {exam.studentInstitution || 'Central Examination Center'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-span-6 space-y-2 pl-1">
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            Examination Particulars
+          </div>
+          <div>
+            <h3 className="text-base font-black text-slate-950 tracking-tight leading-snug uppercase">
+              {exam.subjectId?.name || exam.title}
+            </h3>
+            <div className="mt-2 space-y-1.5 text-xs">
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Assessment:</span>
+                <span className="font-bold text-slate-900 text-xs truncate">
+                  {exam.title}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Syllabus Scope:</span>
+                <span className="font-bold text-slate-900 text-xs">
+                  {exam.week ? `Week ${exam.week} Targeted Module` : 'Comprehensive Syllabus Examination'}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Date Conducted:</span>
+                <span className="font-bold text-slate-800 text-xs">
+                  {formattedDate} {formattedTime ? `at ${formattedTime}` : ''}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Duration:</span>
+                <span className="font-bold text-slate-800 text-xs">
+                  {exam.durationMinutes || 15} Minutes
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Performance Summary 4 Cards */}
+      <div className="grid grid-cols-4 gap-2.5 mb-3.5">
+        <div className="border border-slate-300 rounded-xl p-2.5 text-center bg-white shadow-2xs">
+          <p className="text-[9px] uppercase font-extrabold text-slate-500 tracking-wider">Marks Obtained</p>
+          <p className="text-xl font-black text-slate-950 mt-0.5">
+            {correct} <span className="text-xs font-semibold text-slate-500">/ {totalQ}</span>
+          </p>
+        </div>
+        <div className="border border-slate-300 rounded-xl p-2.5 text-center bg-white shadow-2xs">
+          <p className="text-[9px] uppercase font-extrabold text-slate-500 tracking-wider">Percentage</p>
+          <p className="text-xl font-black text-slate-950 mt-0.5">{percentage}%</p>
+        </div>
+        <div className="border border-slate-300 rounded-xl p-2.5 text-center bg-white shadow-2xs">
+          <p className="text-[9px] uppercase font-extrabold text-slate-500 tracking-wider">Letter Grade</p>
+          <p className="text-xl font-black text-slate-950 mt-0.5">{grade}</p>
+        </div>
+        <div className={`border rounded-xl p-2.5 text-center shadow-2xs flex flex-col justify-center ${
+          passed ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-red-50 border-red-300 text-red-900'
+        }`}>
+          <p className="text-[9px] uppercase font-extrabold tracking-wider">Examination Result</p>
+          <p className="text-sm font-black mt-0.5 tracking-wide uppercase truncate">
+            {passed ? 'QUALIFIED' : 'UNSATISFACTORY'}
+          </p>
+        </div>
+      </div>
+
+      {/* Assessment Evaluation Breakdown Table */}
+      <div className="border border-slate-300 rounded-xl overflow-hidden mb-4">
+        <div className="bg-slate-100 px-3.5 py-1.5 border-b border-slate-300 font-extrabold text-[11px] text-slate-800 uppercase tracking-wider">
+          Assessment Evaluation Breakdown
+        </div>
+        <table className="w-full text-xs">
+          <tbody className="divide-y divide-slate-200">
+            <tr>
+              <td className="py-2 px-3.5 font-semibold text-slate-700">Total Curriculum Questions Evaluated</td>
+              <td className="py-2 px-3.5 font-bold text-slate-950 text-right">{totalQ} Questions</td>
+            </tr>
+            <tr>
+              <td className="py-2 px-3.5 font-semibold text-slate-700">Verified Correct Answers</td>
+              <td className="py-2 px-3.5 font-bold text-emerald-700 text-right">{correct} Correct</td>
+            </tr>
+            <tr>
+              <td className="py-2 px-3.5 font-semibold text-slate-700">Incorrect / Unanswered Responses</td>
+              <td className="py-2 px-3.5 font-bold text-red-600 text-right">{incorrect} Incorrect</td>
+            </tr>
+            <tr>
+              <td className="py-2 px-3.5 font-semibold text-slate-700">Passing Qualifying Benchmark</td>
+              <td className="py-2 px-3.5 font-bold text-slate-800 text-right">{passingBenchmark}% Score Required</td>
+            </tr>
+            <tr>
+              <td className="py-2 px-3.5 font-semibold text-slate-700">Candidate Accuracy Rate</td>
+              <td className="py-2 px-3.5 font-bold text-slate-950 text-right">{accuracy}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Official Endorsement & Verification Footer */}
+      <div className="border-t-2 border-slate-900 pt-3.5 mt-4">
+        <div className="flex justify-between items-end text-xs text-slate-600">
+          <div>
+            <p className="font-extrabold text-slate-900 uppercase tracking-widest text-[10px]">System Validation Seal</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Automated Central Evaluation Engine • Digitally Certified</p>
+            <div className="mt-1.5 inline-block px-2.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-[9px] text-slate-700">
+              HASH: {exam._id}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="w-44 border-b border-slate-800 mb-1 ml-auto"></div>
+            <p className="font-bold text-xs text-slate-900">Controller of Examinations</p>
+            <p className="text-[10px] text-slate-500">Board of Academic Assessment & Grading</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderCompactExamCard(exam, index, totalCount) {
+  const {
+    formattedDate,
+    totalQ,
+    correct,
+    incorrect,
+    percentage,
+    passingBenchmark,
+    passed,
+    grade,
+    accuracy,
+    certRef
+  } = formatPrintExamData(exam);
+
+  return (
+    <div className="border border-slate-300 rounded-xl p-3 bg-white shadow-2xs">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-900">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 text-amber-400 flex items-center justify-center shadow-xs shrink-0">
+            <GraduationCap className="w-4 h-4 text-amber-400 stroke-[2.2]" />
+          </div>
+          <div className="leading-tight">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-black text-slate-950 tracking-tight leading-none uppercase">
+                MCQs BANK
+              </h1>
+              <span className="text-[8px] font-extrabold uppercase tracking-widest bg-slate-900 text-white px-1.5 py-0.5 rounded">
+                Official Transcript
+              </span>
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-800 mt-0.5">
+              Academic Portal
+            </p>
+          </div>
+        </div>
+        <div className="text-right leading-tight">
+          <div className="font-mono font-bold text-[10px] text-slate-900 tracking-wider">
+            TRANSCRIPT REF: {certRef}
+          </div>
+          <div className="text-[9px] text-slate-500 font-medium">
+            Issued: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </div>
+          <div className="text-[8px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+            Record {index} of {totalCount}
+          </div>
+        </div>
+      </div>
+
+      {/* Candidate Profile & Exam Details Grid */}
+      <div className="grid grid-cols-12 gap-2 p-2 mb-2 bg-slate-50 border border-slate-300 rounded-lg text-[11px]">
+        <div className="col-span-6 space-y-1 pr-2 border-r border-slate-200">
+          <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Candidate Profile</div>
+          <h2 className="text-sm font-black text-slate-950 tracking-tight leading-tight uppercase truncate">
+            {exam.studentName}
+          </h2>
+          <div className="space-y-0.5 text-[10px]">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold text-slate-500 uppercase text-[9px] w-20 shrink-0">Roll No:</span>
+              <span className="font-mono font-black text-slate-900">{exam.studentRollNo || 'N/A'}</span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold text-slate-500 uppercase text-[9px] w-20 shrink-0">Class / Sem:</span>
+              <span className="font-black text-slate-900 truncate">{exam.studentClass || 'N/A'}</span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold text-slate-500 uppercase text-[9px] w-20 shrink-0">Institution:</span>
+              <span className="font-bold text-slate-800 truncate">{exam.studentInstitution || 'Central Examination Center'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-span-6 space-y-1 pl-1">
+          <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Examination Particulars</div>
+          <h3 className="text-xs font-black text-slate-950 tracking-tight leading-tight uppercase truncate">
+            {exam.subjectId?.name || exam.title}
+          </h3>
+          <div className="space-y-0.5 text-[10px]">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold text-slate-500 uppercase text-[9px] w-20 shrink-0">Assessment:</span>
+              <span className="font-bold text-slate-900 truncate">{exam.title}</span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold text-slate-500 uppercase text-[9px] w-20 shrink-0">Scope:</span>
+              <span className="font-bold text-slate-900 truncate">{exam.week ? `Week ${exam.week} Targeted Module` : 'Comprehensive Syllabus'}</span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold text-slate-500 uppercase text-[9px] w-20 shrink-0">Date:</span>
+              <span className="font-bold text-slate-800">{formattedDate}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Metric Cards */}
+      <div className="grid grid-cols-4 gap-2 mb-2">
+        <div className="border border-slate-300 rounded-lg p-1.5 text-center bg-white shadow-2xs">
+          <p className="text-[8px] uppercase font-extrabold text-slate-500 tracking-wider">Score</p>
+          <p className="text-sm font-black text-slate-950 mt-0.5">{correct} <span className="text-[9px] font-semibold text-slate-500">/ {totalQ}</span></p>
+        </div>
+        <div className="border border-slate-300 rounded-lg p-1.5 text-center bg-white shadow-2xs">
+          <p className="text-[8px] uppercase font-extrabold text-slate-500 tracking-wider">Percentage</p>
+          <p className="text-sm font-black text-slate-950 mt-0.5">{percentage}%</p>
+        </div>
+        <div className="border border-slate-300 rounded-lg p-1.5 text-center bg-white shadow-2xs">
+          <p className="text-[8px] uppercase font-extrabold text-slate-500 tracking-wider">Grade</p>
+          <p className="text-sm font-black text-slate-950 mt-0.5">{grade}</p>
+        </div>
+        <div className={`border rounded-lg p-1.5 text-center flex flex-col justify-center shadow-2xs ${
+          passed ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-red-50 border-red-300 text-red-900'
+        }`}>
+          <p className="text-[8px] uppercase font-extrabold tracking-wider">Result</p>
+          <p className="text-xs font-black mt-0.5 tracking-wide uppercase truncate">
+            {passed ? 'QUALIFIED' : 'UNSATISFACTORY'}
+          </p>
+        </div>
+      </div>
+
+      {/* Breakdown Table */}
+      <div className="border border-slate-300 rounded-lg overflow-hidden mb-2 text-[10px]">
+        <div className="bg-slate-100 px-2.5 py-1 border-b border-slate-300 font-extrabold text-[9px] text-slate-800 uppercase tracking-wider flex justify-between items-center">
+          <span>Assessment Evaluation Breakdown</span>
+          <span className="font-semibold text-slate-500">{exam.durationMinutes || 15} Mins</span>
+        </div>
+        <table className="w-full text-[10px]">
+          <tbody className="divide-y divide-slate-200">
+            <tr>
+              <td className="py-1 px-2.5 font-medium text-slate-700">Total Curriculum Questions Evaluated</td>
+              <td className="py-1 px-2.5 font-bold text-slate-950 text-right">{totalQ} Questions</td>
+            </tr>
+            <tr>
+              <td className="py-1 px-2.5 font-medium text-slate-700">Verified Correct Answers</td>
+              <td className="py-1 px-2.5 font-bold text-emerald-700 text-right">{correct} Correct</td>
+            </tr>
+            <tr>
+              <td className="py-1 px-2.5 font-medium text-slate-700">Incorrect / Unanswered Responses</td>
+              <td className="py-1 px-2.5 font-bold text-red-600 text-right">{incorrect} Incorrect</td>
+            </tr>
+            <tr>
+              <td className="py-1 px-2.5 font-medium text-slate-700">Passing Qualifying Benchmark</td>
+              <td className="py-1 px-2.5 font-bold text-slate-800 text-right">{passingBenchmark}% Score Required</td>
+            </tr>
+            <tr>
+              <td className="py-1 px-2.5 font-medium text-slate-700">Candidate Accuracy Rate</td>
+              <td className="py-1 px-2.5 font-bold text-slate-950 text-right">{accuracy}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-slate-800 pt-1.5 mt-1 flex justify-between items-end text-[9px] text-slate-600">
+        <div>
+          <p className="font-bold text-slate-900 uppercase tracking-wider text-[8px]">System Validation Seal</p>
+          <div className="mt-0.5 inline-block px-1.5 py-0.2 bg-slate-100 border border-slate-300 rounded font-mono text-[8px] text-slate-700">
+            HASH: {exam._id}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="w-32 border-b border-slate-800 mb-0.5 ml-auto"></div>
+          <p className="font-bold text-[9px] text-slate-900 leading-none">Controller of Examinations</p>
+          <p className="text-[8px] text-slate-500">Board of Academic Assessment & Grading</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrintableExamSheet({ exam, exams }) {
+  const examList = useMemo(() => {
+    if (Array.isArray(exams) && exams.length > 0) return exams;
+    if (exam) return [exam];
+    return [];
+  }, [exam, exams]);
+
+  if (examList.length === 0) return null;
+
+  // Single certificate: Standard sized full A4 sheet
+  if (examList.length === 1) {
+    return createPortal(
+      <div id="print-sheet-root" className="bg-white text-slate-900 font-sans p-6 leading-normal box-border">
+        {renderStandardExamCard(examList[0])}
+      </div>,
+      document.body
+    );
+  }
+
+  // Multiple certificates: Adjust two cards per page with divider between
+  const pairs = [];
+  for (let i = 0; i < examList.length; i += 2) {
+    pairs.push(examList.slice(i, i + 2));
+  }
+
+  return createPortal(
+    <div id="print-sheet-root" className="bg-white text-slate-900 font-sans p-4 leading-normal box-border">
+      {pairs.map((pair, pairIdx) => (
+        <div key={pairIdx} className="print-page-pair">
+          {/* Card 1 */}
+          {renderCompactExamCard(pair[0], pairIdx * 2 + 1, examList.length)}
+
+          {/* Academic Perforation Divider */}
+          {pair[1] && (
+            <div className="my-2.5 flex items-center justify-center gap-2 text-slate-400 no-break">
+              <div className="flex-1 border-t-2 border-dashed border-slate-300"></div>
+              <div className="flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-100 border border-slate-300 text-[8px] font-mono font-bold uppercase tracking-wider text-slate-600 shrink-0">
+                <span>✂</span>
+                <span>OFFICIAL ACADEMIC TRANSCRIPT SEPARATION LINE</span>
+                <span>✂</span>
+              </div>
+              <div className="flex-1 border-t-2 border-dashed border-slate-300"></div>
+            </div>
+          )}
+
+          {/* Card 2 */}
+          {pair[1] && renderCompactExamCard(pair[1], pairIdx * 2 + 2, examList.length)}
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
+/* ==========================================================================
  * 1. STUDENT HOMEPAGE
  * ======================================================================== */
 function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
   const dispatch = useDispatch();
   const subjects = useSelector(selectAllSubjects);
   const books = useSelector(selectAllBooks);
-  const catalogStatus = useSelector(selectCatalogStatus);
   const loading = useSelector(selectCatalogLoading);
   const dbConnected = useSelector(selectDbConnected);
   const [dbAlertDismissed, setDbAlertDismissedLocal] = useState(false);
@@ -1368,7 +1824,8 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
     dispatch(fetchCatalogData({ force: true }));
 
     fetch(`/api/status?t=${t}`)
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null)
       .then(d => {
         if (d?.stats) {
           setStatus(d);
@@ -1378,7 +1835,8 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
       .catch(() => {});
 
     fetch(`/api/exams/recent?t=${t}`)
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : { data: [] }))
+      .catch(() => ({ data: [] }))
       .then(d => setRecentExams(d.data || []))
       .catch(() => {});
   };
@@ -1401,7 +1859,69 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
     };
   }, [dispatch]);
 
-  const filteredSubjects = subjects;
+  const [selectedExamId, setSelectedExamId] = useState(null);
+  const [selectedExamForPrint, setSelectedExamForPrint] = useState(null);
+  const [examsForPrint, setExamsForPrint] = useState([]);
+
+  // Automatically sync matching certificates for the selected candidate
+  useEffect(() => {
+    if (selectedExamForPrint) {
+      const targetRoll = (selectedExamForPrint.studentRollNo || '').trim().toLowerCase();
+      const targetName = (selectedExamForPrint.studentName || '').trim().toLowerCase();
+      const matching = recentExams.filter(e => {
+        const eRoll = (e.studentRollNo || '').trim().toLowerCase();
+        const eName = (e.studentName || '').trim().toLowerCase();
+        if (targetRoll && eRoll && targetRoll === eRoll) return true;
+        if (targetName && eName && targetName === eName) return true;
+        return false;
+      });
+      setExamsForPrint(matching.length > 0 ? matching : [selectedExamForPrint]);
+    } else {
+      setExamsForPrint([]);
+    }
+  }, [selectedExamForPrint, recentExams]);
+
+  useEffect(() => {
+    if (recentExams.length > 0) {
+      if (!selectedExamId || !recentExams.some(e => e._id === selectedExamId)) {
+        setSelectedExamId(recentExams[0]._id);
+        setSelectedExamForPrint(recentExams[0]);
+      }
+    }
+  }, [recentExams, selectedExamId]);
+
+  const handlePrintIndividualResult = (examToPrint) => {
+    const target = examToPrint || selectedExamForPrint || recentExams[0];
+    if (!target) return;
+    setSelectedExamForPrint(target);
+    setSelectedExamId(target._id);
+
+    // Group all certificates belonging to the same candidate
+    const targetRoll = (target.studentRollNo || '').trim().toLowerCase();
+    const targetName = (target.studentName || '').trim().toLowerCase();
+    const matching = recentExams.filter(e => {
+      const eRoll = (e.studentRollNo || '').trim().toLowerCase();
+      const eName = (e.studentName || '').trim().toLowerCase();
+      if (targetRoll && eRoll && targetRoll === eRoll) return true;
+      if (targetName && eName && targetName === eName) return true;
+      return false;
+    });
+
+    const studentExams = matching.length > 0 ? matching : [target];
+    setExamsForPrint(studentExams);
+
+    document.body.classList.add('printing-single-result');
+    const cleanup = () => {
+      document.body.classList.remove('printing-single-result');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 50);
+  };
+
   const totalBankQuestions = status.stats?.questions || subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) || 721;
   const overallStats = getOverallStudentStats(totalBankQuestions);
 
@@ -1538,13 +2058,13 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
       {/* 2. SUMMARY STATS CARD (Accurate Real-Time Metrics for Both Books & Subjects) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-3 sm:p-4">
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 items-stretch text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 items-stretch text-center">
           {/* Metric 1: Reference Books */}
           <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1 shadow-2xs">
-              <BookOpen className="w-4 h-4 stroke-[2.2]" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1 shadow-2xs">
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {String(status.stats?.books ?? books.length).padStart(2, '0')}
             </span>
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
@@ -1554,10 +2074,10 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
           {/* Metric 2: Academic Subjects */}
           <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 shadow-2xs">
-              <Layers className="w-4 h-4 stroke-[2.2]" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 shadow-2xs">
+              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {String(status.stats?.subjects ?? subjects.length).padStart(2, '0')}
             </span>
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
@@ -1567,10 +2087,10 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
           {/* Metric 3: Total MCQs */}
           <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 shadow-2xs">
-              <HelpCircle className="w-4 h-4 stroke-[2.2]" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 shadow-2xs">
+              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {status.stats?.questions || totalBankQuestions}
             </span>
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
@@ -1580,10 +2100,10 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
           {/* Metric 4: Solved MCQs by Candidate */}
           <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 shadow-2xs">
-              <CheckSquare className="w-4 h-4 stroke-[2.2]" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 shadow-2xs">
+              <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {overallStats.totalSolved}
             </span>
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
@@ -1592,11 +2112,11 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
           </div>
 
           {/* Metric 5: Bank Solved % */}
-          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition col-span-2 xs:col-span-1 sm:col-span-1">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 shadow-2xs">
-              <Trophy className="w-4 h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-amber-50/60 sm:bg-slate-50/80 border border-amber-200/60 sm:border-slate-100 hover:bg-slate-50 transition col-span-2 sm:col-span-2 lg:col-span-1">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-amber-100 sm:bg-amber-50 text-amber-600 flex items-center justify-center mb-1 shadow-2xs">
+              <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               {overallStats.overallPercentage}%
             </span>
             <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
@@ -2094,39 +2614,253 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
       {/* 5. RECENT EXAM RESULTS */}
       {recentExams.length > 0 && (
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">Recent Examination Submissions</h3>
-            <span className="text-xs font-semibold text-slate-500">{recentExams.length} Recorded</span>
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm mt-6 print:border-none print:shadow-none print:p-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 no-print-sheet">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+                <Award className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Recent Examination Submissions</h3>
+                <p className="text-[11px] text-slate-500">Live records • Tap to inspect or print official certificate</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl shrink-0">
+                {recentExams.length} Recorded
+              </span>
+              <button
+                type="button"
+                onClick={() => handlePrintIndividualResult()}
+                disabled={!selectedExamForPrint && recentExams.length === 0}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95 print:hidden"
+                title={examsForPrint.length > 1
+                  ? `Print all ${examsForPrint.length} certificates for ${selectedExamForPrint?.studentName} (adjusted 2 cards per page with divider)`
+                  : 'Print certified result sheet for selected candidate (standard single page)'
+                }
+              >
+                <Printer className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate">
+                  {examsForPrint.length > 1
+                    ? `Print ${selectedExamForPrint?.studentName ? selectedExamForPrint.studentName.split(' ')[0] : 'Candidate'}'s Results (${examsForPrint.length} Cards • 2/Page)`
+                    : `Print Selected Result (${selectedExamForPrint?.studentName ? selectedExamForPrint.studentName.split(' ')[0] : 'Candidate'})`
+                  }
+                </span>
+              </button>
+            </div>
           </div>
-          <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[500px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] sm:text-xs">
-                  <th className="py-2.5 px-3">Candidate</th>
-                  <th className="py-2.5 px-3">Subject</th>
-                  <th className="py-2.5 px-3">Score</th>
-                  <th className="py-2.5 px-3">Percentage</th>
-                  <th className="py-2.5 px-3">Grade</th>
+
+          {/* MOBILE RESPONSIVE CARD VIEW (block on mobile screens, hidden on desktop) */}
+          <div className="block md:hidden space-y-2.5 max-h-[360px] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-slate-300">
+            {recentExams.map((ex) => {
+              const examDate = new Date(ex.submittedAt || ex.createdAt || ex.startedAt || Date.now());
+              const formattedDate = !isNaN(examDate.getTime())
+                ? examDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'N/A';
+              const isSelected = selectedExamId === ex._id;
+              const targetRoll = (ex.studentRollNo || '').trim().toLowerCase();
+              const targetName = (ex.studentName || '').trim().toLowerCase();
+              const count = recentExams.filter((e) => {
+                const eRoll = (e.studentRollNo || '').trim().toLowerCase();
+                const eName = (e.studentName || '').trim().toLowerCase();
+                if (targetRoll && eRoll && targetRoll === eRoll) return true;
+                if (targetName && eName && targetName === eName) return true;
+                return false;
+              }).length;
+
+              return (
+                <div
+                  key={ex._id}
+                  onClick={() => {
+                    setSelectedExamId(ex._id);
+                    setSelectedExamForPrint(ex);
+                  }}
+                  className={`p-3 rounded-xl border transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/40 shadow-xs'
+                      : 'bg-white border-slate-200/90 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm truncate">
+                          {ex.studentName}
+                        </span>
+                      </div>
+                      {(ex.studentRollNo || ex.studentClass) && (
+                        <p className="text-[10px] text-slate-400 pl-3.5 mt-0.5 truncate">
+                          {[ex.studentRollNo, ex.studentClass].filter(Boolean).join(' • ')}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                        ex.summary?.passed
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}
+                    >
+                      {ex.summary?.grade || (ex.summary?.passed ? 'Pass' : 'Fail')}
+                    </span>
+                  </div>
+
+                  <div className="pl-3.5 space-y-1">
+                    <p className="text-xs font-semibold text-slate-700 line-clamp-1">
+                      {ex.subjectId?.name || ex.title}
+                    </p>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span>{formattedDate}</span>
+                      </span>
+                      <span className="font-black text-slate-900">
+                        {ex.summary?.obtainedMarks}/{ex.summary?.totalQuestions} ({ex.summary?.percentage}%)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-400">
+                      {count > 1 ? `${count} Certificates` : '1 Certificate'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrintIndividualResult(ex);
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                      title={count > 1
+                        ? `Print all ${count} certificates for ${ex.studentName} (2 cards per page)`
+                        : `Print official certified result sheet for ${ex.studentName}`
+                      }
+                    >
+                      <Printer className="w-3 h-3 text-amber-400" />
+                      <span>{count > 1 ? `Print Sheets (${count})` : 'Print Sheet'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* DESKTOP TABLE VIEW (hidden on mobile, visible on md and up) */}
+          <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[305px] border border-slate-200/90 rounded-xl scrollbar-thin scrollbar-thumb-slate-300">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[640px]">
+              <thead className="sticky top-0 bg-slate-50/95 backdrop-blur-md z-10 border-b border-slate-200 text-slate-600 uppercase text-[10px] sm:text-xs shadow-xs">
+                <tr>
+                  <th className="py-2.5 px-3 font-bold">Candidate</th>
+                  <th className="py-2.5 px-3 font-bold">Subject</th>
+                  <th className="py-2.5 px-3 font-bold">Date Conducted</th>
+                  <th className="py-2.5 px-3 font-bold text-center">Score</th>
+                  <th className="py-2.5 px-3 font-bold text-center">Percentage</th>
+                  <th className="py-2.5 px-3 font-bold text-center">Grade</th>
+                  <th className="py-2.5 px-3 font-bold text-right print:hidden">Result Sheet</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {recentExams.map(ex => (
-                  <tr key={ex._id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-2.5 px-3 font-medium text-slate-900">{ex.studentName}</td>
-                    <td className="py-2.5 px-3 text-slate-600">{ex.subjectId?.name || ex.title}</td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-700">{ex.summary?.obtainedMarks}/{ex.summary?.totalQuestions}</td>
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{ex.summary?.percentage}%</td>
-                    <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${ex.summary?.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                        {ex.summary?.grade}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {recentExams.map(ex => {
+                  const examDate = new Date(ex.submittedAt || ex.createdAt || ex.startedAt || Date.now());
+                  const formattedDate = !isNaN(examDate.getTime())
+                    ? examDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : 'N/A';
+                  const isSelected = selectedExamId === ex._id;
+
+                  return (
+                    <tr
+                      key={ex._id}
+                      onClick={() => {
+                        setSelectedExamId(ex._id);
+                        setSelectedExamForPrint(ex);
+                      }}
+                      className={`cursor-pointer transition ${
+                        isSelected
+                          ? 'bg-amber-50/70 ring-1 ring-inset ring-amber-400/50'
+                          : 'hover:bg-slate-50/80'
+                      }`}
+                    >
+                      <td className="py-2.5 px-3 font-medium text-slate-900">
+                        <div className="flex items-center gap-1.5">
+                          {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>}
+                          <span className={isSelected ? 'font-bold text-amber-950' : ''}>{ex.studentName}</span>
+                        </div>
+                        {(ex.studentRollNo || ex.studentClass) && (
+                          <div className="text-[10px] text-slate-400 pl-3">
+                            {[ex.studentRollNo, ex.studentClass].filter(Boolean).join(' • ')}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600 font-medium">{ex.subjectId?.name || ex.title}</td>
+                      <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap text-xs font-medium">
+                        {formattedDate}
+                      </td>
+                      <td className="py-2.5 px-3 font-semibold text-slate-700 text-center">
+                        {ex.summary?.obtainedMarks}/{ex.summary?.totalQuestions}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900 text-center">
+                        {ex.summary?.percentage}%
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <span className={`inline-block px-2.5 py-0.5 rounded text-xs font-bold ${
+                          ex.summary?.passed
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {ex.summary?.grade || (ex.summary?.passed ? 'Pass' : 'Fail')}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right whitespace-nowrap print:hidden">
+                        {(() => {
+                          const targetRoll = (ex.studentRollNo || '').trim().toLowerCase();
+                          const targetName = (ex.studentName || '').trim().toLowerCase();
+                          const count = recentExams.filter(e => {
+                            const eRoll = (e.studentRollNo || '').trim().toLowerCase();
+                            const eName = (e.studentName || '').trim().toLowerCase();
+                            if (targetRoll && eRoll && targetRoll === eRoll) return true;
+                            if (targetName && eName && targetName === eName) return true;
+                            return false;
+                          }).length;
+
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrintIndividualResult(ex);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 hover:text-amber-300 text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                              title={count > 1
+                                ? `Print all ${count} certificates for ${ex.studentName} (adjusted 2 cards per page)`
+                                : `Print official certified result sheet for ${ex.studentName} (standard size)`
+                              }
+                            >
+                              <Printer className="w-3 h-3 text-amber-400" />
+                              <span>{count > 1 ? `Print Sheets (${count})` : 'Print Sheet'}</span>
+                            </button>
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          {/* Scroll hint when more than 5 submissions exist */}
+          {recentExams.length > 5 && (
+            <div className="flex items-center justify-between px-3.5 py-2 mt-2 bg-slate-50/90 border border-slate-200/80 text-[11px] text-slate-500 rounded-xl no-print-sheet">
+              <span>Showing <strong>5 visible records</strong> of {recentExams.length} total</span>
+              <span className="flex items-center gap-1 font-semibold text-slate-700">
+                <ArrowDown className="w-3 h-3 text-amber-500 animate-bounce" /> Scroll table down to view older submissions
+              </span>
+            </div>
+          )}
+
+          {/* INDIVIDUAL CERTIFIED RESULT TRANSCRIPT (PORTAL TO BODY - GUARANTEED 1 PAGE) */}
+          <PrintableExamSheet exam={selectedExamForPrint} exams={examsForPrint} />
         </div>
       )}
     </div>
@@ -2235,7 +2969,7 @@ function CatalogPage() {
             }`}
           >
             <span>All Subjects</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
               !selectedSubject ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
             }`}>
               {books.length}
@@ -2261,7 +2995,7 @@ function CatalogPage() {
               >
                 <span>{s.name}</span>
                 {subBookCount > 0 && (
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
                     isSelected ? 'bg-slate-950 text-white' : 'bg-slate-200 text-slate-700'
                   }`}>
                     {subBookCount}
@@ -2433,7 +3167,8 @@ function PracticePage() {
     }
     const params = new URLSearchParams(location.search);
     fetch(`/api/questions?${params.toString()}`)
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : { questions: [] }))
+      .catch(() => ({ questions: [] }))
       .then(d => {
         const list = d.questions || [];
         API_CACHE.questions[key] = list;
@@ -2797,14 +3532,17 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
   const transcript = useSelector(selectExamTranscript);
   const examStatus = useSelector(selectExamStatus);
   const examError = useSelector(selectExamError);
-  const isExamActive = useSelector(selectIsExamActive);
 
   const [config, setConfig] = useState({
     subjectId: urlSubjectId || subjects?.[0]?._id || '',
     bookId: urlBookId || '',
+    week: '',
     questionCount: 20,
     durationMinutes: 20
   });
+
+  const [availableWeeks, setAvailableWeeks] = useState([]);
+  const [weeksLoading, setWeeksLoading] = useState(false);
 
   const [inlineAuth, setInlineAuth] = useState({
     name: '',
@@ -2837,6 +3575,44 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
   useEffect(() => {
     dispatch(fetchCatalogData());
   }, [dispatch]);
+
+  // Fetch available weeks whenever subject or book changes
+  useEffect(() => {
+    if (!config.subjectId) {
+      setAvailableWeeks([]);
+      return;
+    }
+    setWeeksLoading(true);
+    const query = new URLSearchParams({
+      subjectId: config.subjectId,
+      ...(config.bookId ? { bookId: config.bookId } : {})
+    });
+    fetch(`/api/questions/weeks?${query.toString()}`)
+      .then(r => (r.ok ? r.json() : { success: false, weeks: [] }))
+      .catch(() => ({ success: false, weeks: [] }))
+      .then(d => {
+        if (d.success && Array.isArray(d.weeks)) {
+          setAvailableWeeks(d.weeks);
+        } else {
+          setAvailableWeeks([]);
+        }
+        setWeeksLoading(false);
+      })
+      .catch(() => {
+        setWeeksLoading(false);
+        setAvailableWeeks([]);
+      });
+  }, [config.subjectId, config.bookId]);
+
+  // Weeks for dropdown (available weeks from DB or standard 1-16 weeks)
+  const displayWeeks = useMemo(() => {
+    if (availableWeeks.length > 0) return availableWeeks;
+    return Array.from({ length: 16 }, (_, i) => ({
+      value: String(i + 1),
+      label: `Week ${i + 1}`,
+      weekNumber: i + 1
+    }));
+  }, [availableWeeks]);
 
   // Books filtered for selected subject
   const subjectBooks = useMemo(() => {
@@ -2934,6 +3710,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
     const resultAction = await dispatch(startExamThunk({
       subjectId: config.subjectId,
       bookId: config.bookId || undefined,
+      week: config.week || undefined,
       studentName: studentUser.name,
       studentClass: studentUser.className || '',
       studentRollNo: studentUser.rollNo || '',
@@ -2975,6 +3752,19 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
     dispatch(prevExamQuestion());
   };
 
+  const handlePrintTranscript = () => {
+    document.body.classList.add('printing-single-result');
+    const cleanup = () => {
+      document.body.classList.remove('printing-single-result');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 50);
+  };
+
   if (transcript) {
     const { summary, items, subjectId } = transcript;
     return (
@@ -3005,11 +3795,11 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:py-2 rounded-xl bg-brand-navy hover:bg-brand-navyDark text-white text-xs font-bold shadow-xs transition active:scale-95"
+              onClick={handlePrintTranscript}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:py-2 rounded-xl bg-brand-navy hover:bg-brand-navyDark text-white text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print A4 PDF</span>
+              <Printer className="w-3.5 h-3.5 text-amber-400" />
+              <span>Print A4 Transcript</span>
             </button>
           </div>
         </div>
@@ -3031,6 +3821,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
                 </h2>
                 <p className="text-xs text-slate-600 font-semibold mt-0.5">
                   Subject: <strong className="text-slate-900">{subjectId?.name || 'General Knowledge'}</strong>
+                  {transcript.week && <> • Syllabus: <strong className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[11px]">Week {String(transcript.week).replace(/\D/g, '') || transcript.week}</strong></>}
                 </p>
               </div>
             </div>
@@ -3139,11 +3930,11 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5" dir="ltr">
                     <div className="flex items-center gap-1.5">
-                      <span className="px-1.5 py-0.2 rounded font-black text-[10px] bg-slate-900 text-white font-mono">
+                      <span className="px-1.5 py-0.5 rounded font-black text-[10px] bg-slate-900 text-white font-mono">
                         Q{idx + 1}
                       </span>
                       {item.questionId?.difficulty && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
                           {item.questionId.difficulty}
                         </span>
                       )}
@@ -3205,6 +3996,9 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
             <span>Academic Standards Verified</span>
           </div>
         </div>
+
+        {/* Dedicated 1-Page Official Printed Certificate Portal */}
+        <PrintableExamSheet exam={transcript} exams={[transcript]} />
       </div>
     );
   }
@@ -3602,22 +4396,22 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
   }
 
   return (
-    <div className="max-w-md mx-auto my-4 sm:my-6 px-3.5 sm:px-4 animate-fadeIn">
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm">
-        {/* Candidate Profile Verification Card */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+    <div className="max-w-md mx-auto my-3 sm:my-4 px-3 sm:px-4 animate-fadeIn">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3">
+        {/* Candidate Profile Verification Card - Compact */}
+        <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl px-3 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-brand-navy text-amber-400 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
               {studentUser.name ? studentUser.name.charAt(0).toUpperCase() : 'S'}
             </div>
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold text-slate-900 text-xs sm:text-sm">{studentUser.name}</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 leading-tight">
+                <span className="font-bold text-slate-900 text-xs sm:text-sm truncate">{studentUser.name}</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
                   Verified
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[10px] text-slate-500 truncate mt-0.5">
                 Class: <strong className="text-slate-700">{studentUser.className}</strong>
                 {studentUser.rollNo && <> • Roll: <strong className="text-slate-700 font-mono">{studentUser.rollNo}</strong></>}
               </p>
@@ -3626,100 +4420,199 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
           <button
             type="button"
             onClick={onOpenStudentLogin}
-            className="text-xs text-amber-600 hover:text-amber-700 font-bold transition px-2 py-1 rounded-lg hover:bg-amber-50 border border-amber-200 shrink-0"
+            className="text-[11px] text-amber-700 hover:text-amber-800 font-bold px-2 py-0.5 rounded-md hover:bg-amber-50 border border-amber-200/80 shrink-0 transition"
           >
             Edit
           </button>
         </div>
 
-        <h1 className="text-lg sm:text-xl font-black text-slate-900 mb-1">Configure Timed Examination</h1>
-        <p className="text-xs text-slate-500 mb-4">
-          Randomized syllabus questions with server evaluation & certified transcript.
-        </p>
-
-        <form onSubmit={startExam} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Select Subject</label>
-            <select
-              value={config.subjectId}
-              onChange={(e) => setConfig({ ...config, subjectId: e.target.value, bookId: '' })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:outline-none focus:border-brand-navy"
-            >
-              {subjects.map(s => <option key={s._id} value={s._id}>{s.name} ({s.questionCount} MCQs)</option>)}
-            </select>
+        {/* Header */}
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-brand-navy flex items-center justify-center shrink-0">
+            <Clock className="w-4 h-4 text-brand-navy" />
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Reference Book / Syllabus Module
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">Configure Timed Examination</h1>
+            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-tight mt-0.5">
+              Randomized syllabus questions with server evaluation & certified transcript.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={startExam} className="space-y-2.5">
+          {/* Select Subject */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Select Subject
             </label>
             <select
-              value={config.bookId}
-              onChange={(e) => setConfig({ ...config, bookId: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:outline-none focus:border-brand-navy"
+              value={config.subjectId}
+              onChange={(e) => setConfig({ ...config, subjectId: e.target.value, bookId: '', week: '' })}
+              className="w-full px-2.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
             >
-              <option value="">
-                All Reference Books & Syllabus ({subjects.find(s => s._id === config.subjectId)?.questionCount || 0} MCQs)
-              </option>
-              {subjectBooks.map(b => (
-                <option key={b._id} value={b._id}>
-                  {b.title} {b.author ? `— ${b.author}` : ''} ({b.questionCount || 0} MCQs)
+              {subjects.map(s => (
+                <option key={s._id} value={s._id}>
+                  {s.name} ({s.questionCount || 0} MCQs)
                 </option>
               ))}
             </select>
-            {config.bookId && (
-              <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1 font-medium">
-                <Check className="w-3.5 h-3.5" />
-                <span>Custom syllabus focused on chosen textbook</span>
-              </p>
-            )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Number of Questions</label>
-              <input
-                type="number"
-                min="1"
-                max="100"
-                value={config.questionCount}
-                onChange={(e) => setConfig({ ...config, questionCount: Math.max(1, parseInt(e.target.value) || 1) })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm mb-1.5"
-              />
-              <div className="flex flex-wrap items-center gap-1">
-                {[10, 20, 30, 50].map(cnt => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => setConfig(c => ({ ...c, questionCount: cnt, durationMinutes: Math.round(cnt * 1.5) }))}
-                    className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition border ${
-                      Number(config.questionCount) === cnt
-                        ? 'bg-brand-navy text-amber-400 border-brand-navy'
-                        : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                    }`}
-                  >
-                    {cnt} MCQs
-                  </button>
+
+          {/* Reference Book & Week Filter Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+            <div className="sm:col-span-7">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center gap-1">
+                <BookOpen className="w-3 h-3 text-brand-navy" />
+                <span>Reference Book / Module</span>
+              </label>
+              <select
+                value={config.bookId}
+                onChange={(e) => setConfig({ ...config, bookId: e.target.value, week: '' })}
+                className="w-full px-2.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy truncate"
+              >
+                <option value="">
+                  All Books ({subjects.find(s => s._id === config.subjectId)?.questionCount || 0} MCQs)
+                </option>
+                {subjectBooks.map(b => (
+                  <option key={b._id} value={b._id}>
+                    {b.bookNumber ? `[${b.bookNumber}] ` : ''}{b.title} {b.author ? `— ${b.author}` : ''} ({b.questionCount || 0} MCQs)
+                  </option>
                 ))}
+              </select>
+            </div>
+
+            <div className="sm:col-span-5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-brand-navy" />
+                  <span>Syllabus Week</span>
+                </span>
+                {weeksLoading && <span className="text-[9px] text-slate-400 font-normal">Loading...</span>}
+              </label>
+              <select
+                value={config.week}
+                onChange={(e) => setConfig({ ...config, week: e.target.value })}
+                className="w-full px-2.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+              >
+                <option value="">All Weeks (Full Course)</option>
+                {displayWeeks.map(w => (
+                  <option key={w.value} value={w.value}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Active Filter Scope Pill */}
+          {(config.bookId || config.week) && (
+            <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-medium text-amber-900 bg-amber-50/90 border border-amber-200/80 rounded-lg px-2.5 py-1">
+              <Check className="w-3 h-3 text-amber-600 shrink-0" />
+              <span className="font-bold">Focused Scope:</span>
+              {config.bookId && (
+                <span className="bg-white px-1.5 py-0.5 rounded border border-amber-200 font-semibold truncate max-w-[150px]">
+                  {subjectBooks.find(b => b._id === config.bookId)?.title || 'Book'}
+                </span>
+              )}
+              {config.week && (
+                <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold border border-amber-300">
+                  {displayWeeks.find(w => w.value === config.week)?.label || `Week ${config.week}`}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Assessment Parameters Box */}
+          <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-2.5 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Questions Count
+                </label>
+                <input
+                  type="number"
+                  min="5"
+                  max="100"
+                  value={config.questionCount}
+                  onChange={(e) => setConfig({ ...config, questionCount: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:outline-none focus:border-brand-navy"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Duration (Minutes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="180"
+                  value={config.durationMinutes}
+                  onChange={(e) => setConfig({ ...config, durationMinutes: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:outline-none focus:border-brand-navy"
+                />
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Duration (Minutes)</label>
-              <input
-                type="number"
-                min="1"
-                max="180"
-                value={config.durationMinutes}
-                onChange={(e) => setConfig({ ...config, durationMinutes: Math.max(1, parseInt(e.target.value) || 1) })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-              />
+
+            {/* Presets Row */}
+            <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-200/70">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                Quick Presets:
+              </span>
+              <div className="flex items-center gap-1">
+                {[10, 20, 30, 50].map(cnt => {
+                  const active = Number(config.questionCount) === cnt;
+                  return (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setConfig(c => ({
+                        ...c,
+                        questionCount: cnt,
+                        durationMinutes: Math.round(cnt * 1.5)
+                      }))}
+                      className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold transition border cursor-pointer ${
+                        active
+                          ? 'bg-brand-navy text-amber-400 border-brand-navy shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {cnt} MCQs
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
+
+          {examError && (
+            <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <span>{examError}</span>
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-brand-navy hover:bg-brand-navyDark text-white font-bold text-sm shadow-sm transition active:scale-98 flex items-center justify-center gap-2"
+            disabled={examStatus === 'starting'}
+            className="w-full py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navyDark text-white font-bold text-xs sm:text-sm shadow-sm transition active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
           >
-            <Play className="w-4 h-4 text-amber-400" />
-            <span>Start Official Examination</span>
+            {examStatus === 'starting' ? (
+              <>
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                <span>Preparing Examination Session...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                <span>Start Official Examination ({config.questionCount} MCQs • {config.durationMinutes}m)</span>
+              </>
+            )}
           </button>
+
+          <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 pt-0.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Server-evaluated examination • Anti-tamper transcript</span>
+          </div>
         </form>
       </div>
     </div>
@@ -3759,11 +4652,14 @@ function AdminPanel({ adminUser, setAdminUser }) {
   // Modals & Edit Form States
   const [editingSubject, setEditingSubject] = useState(null);
   const [editSubjectForm, setEditSubjectForm] = useState({
-    name: '', code: '', programOrClass: 'BSCS', semester: '5th', academicYear: '2026', language: 'en', status: 'published', description: ''
+    name: '', code: '', programOrClass: 'BSCS', semester: '5th', academicYear: '2026', language: 'en', status: 'published', description: '',
+    bookCount: 0, bookNumber: '', bookTitle: '', bookAuthor: '', bookEdition: ''
   });
   const [isCreatingSubject, setIsCreatingSubject] = useState(false);
+  const [addModalTab, setAddModalTab] = useState('subject'); // 'subject' | 'book'
   const [newSubjectForm, setNewSubjectForm] = useState({
-    name: '', code: '', programOrClass: 'BSCS', semester: '5th', academicYear: '2026', language: 'en', status: 'published', description: ''
+    name: '', code: '', programOrClass: 'BSCS', semester: '5th', academicYear: '2026', language: 'en', status: 'published', description: '',
+    bookCount: 1, bookNumber: '1', bookTitle: '', bookAuthor: '', bookEdition: ''
   });
   const [subjectToDelete, setSubjectToDelete] = useState(null);
   const [isDeletingSubject, setIsDeletingSubject] = useState(false);
@@ -3771,11 +4667,11 @@ function AdminPanel({ adminUser, setAdminUser }) {
   // Book Modals & Forms
   const [isCreatingBook, setIsCreatingBook] = useState(false);
   const [newBookForm, setNewBookForm] = useState({
-    title: '', subjectId: '', author: '', edition: '', programOrClass: 'BSCS', semester: '5th', language: 'en', status: 'published', description: ''
+    title: '', bookNumber: '', subjectId: '', author: '', edition: '', programOrClass: 'BSCS', semester: '5th', language: 'en', status: 'published', description: ''
   });
   const [editingBook, setEditingBook] = useState(null);
   const [editBookForm, setEditBookForm] = useState({
-    title: '', subjectId: '', author: '', edition: '', programOrClass: '', semester: '', language: 'en', status: 'published', description: ''
+    title: '', bookNumber: '', subjectId: '', author: '', edition: '', programOrClass: '', semester: '', language: 'en', status: 'published', description: ''
   });
 
   // JSON & File Upload States
@@ -3794,8 +4690,45 @@ function AdminPanel({ adminUser, setAdminUser }) {
   const [preview, setPreview] = useState(null);
   const [copiedTemplate, setCopiedTemplate] = useState(false);
 
-  // Edit Question State
-  const [editingQuestion, setEditingQuestion] = useState(null);
+  // Examination Submissions Management States
+  const [adminExams, setAdminExams] = useState([]);
+  const [adminExamsLoading, setAdminExamsLoading] = useState(false);
+  const [examSearch, setExamSearch] = useState('');
+  const [examPagination, setExamPagination] = useState({ total: 0, page: 1, pages: 1 });
+  const [examToDelete, setExamToDelete] = useState(null);
+  const [isDeletingExam, setIsDeletingExam] = useState(false);
+  const [isClearingAllExams, setIsClearingAllExams] = useState(false);
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [adminExamToPrint, setAdminExamToPrint] = useState(null);
+  const [adminExamsToPrint, setAdminExamsToPrint] = useState([]);
+
+  const handlePrintAdminExam = (exam) => {
+    if (!exam) return;
+    setAdminExamToPrint(exam);
+
+    const targetRoll = (exam.studentRollNo || '').trim().toLowerCase();
+    const targetName = (exam.studentName || '').trim().toLowerCase();
+    const matching = adminExams.filter(e => {
+      const eRoll = (e.studentRollNo || '').trim().toLowerCase();
+      const eName = (e.studentName || '').trim().toLowerCase();
+      if (targetRoll && eRoll && targetRoll === eRoll) return true;
+      if (targetName && eName && targetName === eName) return true;
+      return false;
+    });
+
+    setAdminExamsToPrint(matching.length > 0 ? matching : [exam]);
+
+    document.body.classList.add('printing-single-result');
+    const cleanup = () => {
+      document.body.classList.remove('printing-single-result');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 50);
+  };
 
   // Refresh all admin data
   const refreshAdminData = async () => {
@@ -3950,6 +4883,15 @@ function AdminPanel({ adminUser, setAdminUser }) {
 
   // --- SUBJECT ACTIONS ---
   const handleOpenEditSubject = (subject) => {
+    const matchingBook = subject.primaryBook || books.find(b => {
+      const bSubId = b.subjectId?._id || b.subjectId;
+      return String(bSubId) === String(subject._id);
+    });
+
+    const displayBookCount = (subject.bookCount !== undefined && subject.bookCount !== null)
+      ? subject.bookCount
+      : (subject.actualBookCount ?? (matchingBook ? 1 : 0));
+
     setEditingSubject(subject);
     setEditSubjectForm({
       name: subject.name || '',
@@ -3959,7 +4901,12 @@ function AdminPanel({ adminUser, setAdminUser }) {
       academicYear: subject.academicYear || '2026',
       language: subject.language || 'en',
       status: subject.status || 'published',
-      description: subject.description || ''
+      description: subject.description || '',
+      bookCount: displayBookCount,
+      bookNumber: matchingBook?.bookNumber || (matchingBook ? '1' : ''),
+      bookTitle: matchingBook?.title || '',
+      bookAuthor: matchingBook?.author || '',
+      bookEdition: matchingBook?.edition || ''
     });
   };
 
@@ -4004,7 +4951,8 @@ function AdminPanel({ adminUser, setAdminUser }) {
         setStatusMsg(`Subject "${data.data.name}" created successfully!`);
         setIsCreatingSubject(false);
         setNewSubjectForm({
-          name: '', code: '', programOrClass: 'BSCS', semester: '5th', academicYear: '2026', language: 'en', status: 'published', description: ''
+          name: '', code: '', programOrClass: 'BSCS', semester: '5th', academicYear: '2026', language: 'en', status: 'published', description: '',
+          bookCount: 1, bookNumber: '1', bookTitle: '', bookAuthor: '', bookEdition: ''
         });
         refreshAdminData();
       } else {
@@ -4073,6 +5021,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
     setEditingBook(book);
     setEditBookForm({
       title: book.title || '',
+      bookNumber: book.bookNumber || '',
       subjectId: book.subjectId?._id || book.subjectId || '',
       author: book.author || '',
       edition: book.edition || '',
@@ -4134,7 +5083,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
         setStatusMsg(`Reference book "${data.data.title}" created successfully!`);
         setIsCreatingBook(false);
         setNewBookForm({
-          title: '', subjectId: '', author: '', edition: '', programOrClass: 'BSCS', semester: '5th', language: 'en', status: 'published', description: ''
+          title: '', bookNumber: '', subjectId: '', author: '', edition: '', programOrClass: 'BSCS', semester: '5th', language: 'en', status: 'published', description: ''
         });
         refreshAdminData();
         setActiveTab('books');
@@ -4182,15 +5131,17 @@ function AdminPanel({ adminUser, setAdminUser }) {
           credentials: 'include',
           body: fd
         });
-        const data = await res.json();
-        if (data.success) {
+        const text = await res.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+        if (data && data.success) {
           setPreview(data.preview);
           if (data.preview.metadata?.book) {
             setUploadBookTitle(data.preview.metadata.book);
             setUploadBookChoice('new');
           }
         } else {
-          alert(data.message || 'Validation failed');
+          alert((data && data.message) || `Validation failed (HTTP ${res.status || 'Unknown'})`);
         }
       } else {
         // Direct Raw JSON Mode
@@ -4210,15 +5161,17 @@ function AdminPanel({ adminUser, setAdminUser }) {
             programOrClass: isNewSubjectUpload ? newSubjectForUpload.programOrClass : undefined
           })
         });
-        const data = await res.json();
-        if (data.success) {
+        const text = await res.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+        if (data && data.success) {
           setPreview(data.preview);
           if (data.preview.metadata?.book) {
             setUploadBookTitle(data.preview.metadata.book);
             setUploadBookChoice('new');
           }
         } else {
-          alert(data.message || 'Validation failed');
+          alert((data && data.message) || `Validation failed (HTTP ${res.status || 'Unknown'})`);
         }
       }
     } catch (err) {
@@ -4264,8 +5217,10 @@ function AdminPanel({ adminUser, setAdminUser }) {
           randomizeOptions
         })
       });
-      const data = await res.json();
-      if (data.success) {
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+      if (data && data.success) {
         setStatusMsg(
           `Successfully committed ${data.summary.insertedCount} MCQs to database! Linked to Book: "${data.summary.bookTitle || 'Academic Reference Book'}" (${data.summary.skippedDuplicates} duplicates handled).`
         );
@@ -4278,7 +5233,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
         refreshAdminData();
         setActiveTab('books');
       } else {
-        alert(data.message || 'Commit failed');
+        alert((data && data.message) || `Commit failed (HTTP ${res.status || 'Unknown'})`);
       }
     } catch (err) {
       alert('Error committing import: ' + err.message);
@@ -4322,6 +5277,94 @@ function AdminPanel({ adminUser, setAdminUser }) {
       alert('Failed to delete question');
     }
   };
+
+  const fetchAdminExams = async (page = 1, search = examSearch) => {
+    setAdminExamsLoading(true);
+    try {
+      const headers = getAuthHeaders();
+      const t = Date.now();
+      const query = new URLSearchParams({ page, limit: 50, t });
+      if (search && search.trim()) query.append('search', search.trim());
+      const res = await fetch(`/api/admin/exams?${query.toString()}`, { headers, credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setAdminExams(data.data || []);
+        if (data.pagination) setExamPagination(data.pagination);
+      }
+    } catch (err) {
+      console.error('[Admin] Error fetching exams:', err);
+    } finally {
+      setAdminExamsLoading(false);
+    }
+  };
+
+  const handleDeleteSingleExam = async (examId) => {
+    if (!examId) return;
+    setIsDeletingExam(true);
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch(`/api/admin/exams/${examId}`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusMsg('Examination record deleted successfully.');
+        setExamToDelete(null);
+        setAdminExams(prev => prev.filter(ex => ex._id !== examId));
+        setStats(prev => prev ? {
+          ...prev,
+          totalExams: Math.max(0, (prev.totalExams || 1) - 1),
+          recentExams: (prev.recentExams || []).filter(ex => ex._id !== examId)
+        } : null);
+        window.dispatchEvent(new CustomEvent('academic_progress_updated'));
+      } else {
+        alert(data.message || 'Failed to delete examination record.');
+      }
+    } catch (err) {
+      alert(err.message || 'Error communicating with server.');
+    } finally {
+      setIsDeletingExam(false);
+    }
+  };
+
+  const handleClearAllExams = async () => {
+    setIsClearingAllExams(true);
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/admin/exams', {
+        method: 'DELETE',
+        headers,
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusMsg(data.message || 'All examination records have been permanently cleared.');
+        setShowClearAllModal(false);
+        setAdminExams([]);
+        setExamPagination({ total: 0, page: 1, pages: 1 });
+        setStats(prev => prev ? {
+          ...prev,
+          totalExams: 0,
+          recentExams: []
+        } : null);
+        window.dispatchEvent(new CustomEvent('academic_progress_updated'));
+      } else {
+        alert(data.message || 'Failed to clear examination records.');
+      }
+    } catch (err) {
+      alert(err.message || 'Error communicating with server.');
+    } finally {
+      setIsClearingAllExams(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'exams' && adminUser) {
+      fetchAdminExams(1);
+    }
+  }, [activeTab, adminUser]);
 
   // ========================================================================
   // RENDER: LOGIN FORM (If not logged in)
@@ -4496,7 +5539,8 @@ function AdminPanel({ adminUser, setAdminUser }) {
                 status: 'published',
                 description: ''
               });
-              setIsCreatingBook(true);
+              setAddModalTab('book');
+              setIsCreatingSubject(true);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition shadow-2xs"
           >
@@ -4568,7 +5612,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
         >
           <UploadCloud className="w-3.5 h-3.5" />
           <span>JSON Upload</span>
-          <span className="px-1 py-0.2 rounded text-[9px] bg-brand-gold text-slate-950 font-black">BULK</span>
+          <span className="px-1 py-0.5 rounded text-[9px] bg-brand-gold text-slate-950 font-black">BULK</span>
         </button>
 
         <button
@@ -4593,6 +5637,18 @@ function AdminPanel({ adminUser, setAdminUser }) {
         >
           <Layers className="w-3.5 h-3.5" />
           <span>Books ({books.length})</span>
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('exams'); fetchAdminExams(1); }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition ${
+            activeTab === 'exams'
+              ? 'bg-white text-brand-navy shadow-xs font-bold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5 text-amber-500" />
+          <span>Exams ({stats?.totalExams || 0})</span>
         </button>
       </div>
 
@@ -4645,14 +5701,17 @@ function AdminPanel({ adminUser, setAdminUser }) {
               </span>
             </div>
 
-            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-2xs">
+            <div
+              onClick={() => { setActiveTab('exams'); fetchAdminExams(1); }}
+              className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-2xs cursor-pointer hover:border-slate-300 transition group"
+            >
               <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase font-bold text-slate-400">
                 <span>Exams Taken</span>
-                <Award className="w-3.5 h-3.5 text-emerald-500" />
+                <Award className="w-3.5 h-3.5 text-emerald-500 group-hover:scale-110 transition transform" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5">{stats.totalExams}</p>
               <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate block mt-0.5">
-                Candidate Submissions
+                Candidate Submissions →
               </span>
             </div>
           </div>
@@ -4746,38 +5805,160 @@ function AdminPanel({ adminUser, setAdminUser }) {
 
           {/* Recent Candidate Exams */}
           {stats.recentExams && stats.recentExams.length > 0 && (
-            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xs space-y-2">
-              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Recent Examination Submissions</h3>
-              <div className="overflow-x-auto">
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xs space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900">Recent Examination Submissions</h3>
+                  <p className="text-[11px] text-slate-500">Live submissions recorded by the assessment engine</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setActiveTab('exams'); fetchAdminExams(1); }}
+                    className="text-xs font-semibold text-brand-navy hover:underline cursor-pointer"
+                  >
+                    View All ({stats.totalExams || stats.recentExams.length}) →
+                  </button>
+                  <button
+                    onClick={() => setShowClearAllModal(true)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition border border-rose-200 cursor-pointer"
+                    title="Clear all examination records completely"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Clear All Records</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* MOBILE RESPONSIVE CARDS VIEW (block on mobile screens <768px, hidden on desktop) */}
+              <div className="block md:hidden space-y-2 max-h-[320px] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-slate-300">
+                {stats.recentExams.map(ex => {
+                  const examDate = new Date(ex.submittedAt || ex.createdAt || Date.now());
+                  const formattedDate = !isNaN(examDate.getTime())
+                    ? examDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : 'N/A';
+
+                  return (
+                    <div key={ex._id} className="p-3 rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50/70 transition shadow-2xs space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-slate-900 truncate">{ex.studentName}</p>
+                          {(ex.studentRollNo || ex.studentClass) && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                              {[ex.studentRollNo, ex.studentClass].filter(Boolean).join(' • ')}
+                            </p>
+                          )}
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                          ex.summary?.passed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {ex.summary?.grade || (ex.summary?.passed ? 'Pass' : 'Fail')}
+                        </span>
+                      </div>
+
+                      <p className="text-xs font-medium text-slate-700 truncate">
+                        {ex.subjectId?.name || ex.title}
+                      </p>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                        <div className="flex items-center gap-1.5">
+                          <span>{formattedDate}</span>
+                          <span>•</span>
+                          <span className="font-bold text-slate-900">
+                            {ex.summary?.obtainedMarks}/{ex.summary?.totalQuestions} ({ex.summary?.percentage}%)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handlePrintAdminExam(ex)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold transition cursor-pointer"
+                            title="Print certified result sheet for this candidate"
+                          >
+                            <Printer className="w-3 h-3 text-amber-600" />
+                            <span>Print</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExamToDelete(ex)}
+                            className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-200 transition cursor-pointer"
+                            title="Delete this candidate exam submission"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DESKTOP TABLE VIEW (hidden on mobile, visible on md and up) */}
+              <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[305px] border border-slate-200/80 rounded-xl scrollbar-thin scrollbar-thumb-slate-300">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                  <thead className="sticky top-0 bg-slate-50/95 backdrop-blur-xs z-10 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold shadow-xs">
+                    <tr>
                       <th className="py-2 px-2.5">Candidate</th>
                       <th className="py-2 px-2.5">Subject</th>
                       <th className="py-2 px-2.5">Score</th>
                       <th className="py-2 px-2.5">Percentage</th>
                       <th className="py-2 px-2.5">Grade</th>
                       <th className="py-2 px-2.5">Date</th>
+                      <th className="py-2 px-2.5 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {stats.recentExams.map(ex => (
                       <tr key={ex._id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-2.5 font-semibold text-slate-900">{ex.studentName}</td>
+                        <td className="py-2 px-2.5 font-semibold text-slate-900">
+                          <div>{ex.studentName}</div>
+                          {(ex.studentRollNo || ex.studentClass) && (
+                            <div className="text-[10px] text-slate-400 font-normal">
+                              {[ex.studentRollNo, ex.studentClass].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                        </td>
                         <td className="py-2 px-2.5 text-slate-600">{ex.subjectId?.name || ex.title}</td>
                         <td className="py-2 px-2.5 font-medium">{ex.summary?.obtainedMarks} / {ex.summary?.totalQuestions}</td>
                         <td className="py-2 px-2.5 font-bold">{ex.summary?.percentage}%</td>
                         <td className="py-2 px-2.5">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ex.summary?.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                            {ex.summary?.grade}
+                            {ex.summary?.grade || (ex.summary?.passed ? 'Pass' : 'Fail')}
                           </span>
                         </td>
-                        <td className="py-2 px-2.5 text-slate-400 text-[11px]">{new Date(ex.submittedAt).toLocaleDateString()}</td>
+                        <td className="py-2 px-2.5 text-slate-400 text-[11px] whitespace-nowrap">
+                          {new Date(ex.submittedAt || ex.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="py-2 px-2.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handlePrintAdminExam(ex)}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition inline-flex items-center cursor-pointer mr-1"
+                            title="Print certified result sheet for this candidate"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-amber-500" />
+                          </button>
+                          <button
+                            onClick={() => setExamToDelete(ex)}
+                            className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                            title="Delete this candidate exam submission"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {stats.recentExams.length > 5 && (
+                <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50/80 border border-slate-200/80 text-[10px] text-slate-500 rounded-lg">
+                  <span>Showing <strong>5 visible records</strong> of {stats.recentExams.length}</span>
+                  <span className="flex items-center gap-1 font-semibold text-slate-600">
+                    <ArrowDown className="w-3 h-3 text-amber-500 animate-bounce" /> Scroll down for more records
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -4810,12 +5991,40 @@ function AdminPanel({ adminUser, setAdminUser }) {
               <h2 className="text-sm sm:text-base font-bold text-slate-900">Academic Subjects Catalog</h2>
               <p className="text-[11px] sm:text-xs text-slate-500">Edit curriculum, update syllabus, change status, or add new subjects</p>
             </div>
-            <button
-              onClick={() => setIsCreatingSubject(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark transition shadow-2xs self-start sm:self-auto"
-            >
-              <PlusCircle className="w-3.5 h-3.5" /> <span>Add New Subject</span>
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewBookForm({
+                    title: '',
+                    bookNumber: '1',
+                    subjectId: subjects[0]?._id || '',
+                    author: '',
+                    edition: '',
+                    programOrClass: subjects[0]?.programOrClass || 'BSCS',
+                    semester: subjects[0]?.semester || '5th',
+                    language: 'en',
+                    status: 'published',
+                    description: ''
+                  });
+                  setAddModalTab('book');
+                  setIsCreatingSubject(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-slate-300 text-slate-700 bg-white text-xs font-bold hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-blue-600" /> <span>Add Book</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddModalTab('subject');
+                  setIsCreatingSubject(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark transition shadow-2xs cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5" /> <span>Add New Subject</span>
+              </button>
+            </div>
           </div>
 
           {/* Search & Filters */}
@@ -4898,8 +6107,12 @@ function AdminPanel({ adminUser, setAdminUser }) {
                         <td className="py-2 px-2.5 font-bold text-slate-900">
                           {sub.questionCount || 0}
                         </td>
-                        <td className="py-2 px-2.5 text-xs text-slate-600">
-                          {sub.bookCount || 0}
+                        <td className="py-2 px-2.5 text-xs font-semibold text-slate-800">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] ${
+                            (sub.bookCount || 0) > 0 ? 'bg-slate-100 text-slate-800 font-bold' : 'text-slate-400'
+                          }`}>
+                            {sub.bookCount ?? 0}
+                          </span>
                         </td>
                         <td className="py-2 px-2.5">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
@@ -5531,7 +6744,8 @@ function AdminPanel({ adminUser, setAdminUser }) {
                   status: 'published',
                   description: ''
                 });
-                setIsCreatingBook(true);
+                setAddModalTab('book');
+                setIsCreatingSubject(true);
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark transition shadow-2xs self-start sm:self-auto cursor-pointer"
             >
@@ -5558,9 +6772,16 @@ function AdminPanel({ adminUser, setAdminUser }) {
                         {b.questionCount || 0} MCQs
                       </span>
                     </div>
-                    <h3 className="font-bold text-slate-900 text-sm sm:text-base">{b.title}</h3>
+                    <h3 className="font-bold text-slate-900 text-sm sm:text-base flex items-center flex-wrap gap-1.5">
+                      {b.bookNumber && (
+                        <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                          Book #{b.bookNumber}
+                        </span>
+                      )}
+                      <span>{b.title}</span>
+                    </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Author: {b.author || 'Academic Faculty'} • {b.edition || 'Standard Edition'}
+                      {b.bookNumber ? `Vol/No: ${b.bookNumber} • ` : ''}Author: {b.author || 'Academic Faculty'} • {b.edition || 'Standard Edition'}
                     </p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       Program: {b.programOrClass || 'General'} {b.semester}
@@ -5600,76 +6821,340 @@ function AdminPanel({ adminUser, setAdminUser }) {
       )}
 
       {/* ====================================================================
-       * MODAL: EDIT SUBJECT MODAL (Update Any Subject)
+       * TAB: EXAMINATION SUBMISSIONS MANAGEMENT
+       * ================================================================== */}
+      {activeTab === 'exams' && (
+        <div className="space-y-3.5 sm:space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                  <Award className="w-4 h-4 text-amber-600" />
+                </div>
+                <h2 className="text-sm sm:text-base font-bold text-slate-900">Candidate Examination Submissions</h2>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                Audit, manage, and clear recent examination attempts and certified result sheets
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fetchAdminExams(1)}
+                disabled={adminExamsLoading}
+                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                title="Refresh exam submissions"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${adminExamsLoading ? 'animate-spin text-blue-600' : ''}`} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowClearAllModal(true)}
+                disabled={adminExams.length === 0 && (!stats?.totalExams || stats.totalExams === 0)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="Clear all examination records permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear All Records ({examPagination.total || adminExams.length || stats?.totalExams || 0})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200/90 rounded-xl px-3 py-2 shadow-2xs">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search by candidate name, roll number, or exam title..."
+              value={examSearch}
+              onChange={(e) => {
+                setExamSearch(e.target.value);
+                fetchAdminExams(1, e.target.value);
+              }}
+              className="w-full text-xs bg-transparent focus:outline-none"
+            />
+            {examSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setExamSearch('');
+                  fetchAdminExams(1, '');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Table */}
+          <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl shadow-2xs overflow-hidden">
+            {adminExamsLoading && adminExams.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="w-8 h-8 rounded-full border-3 border-amber-400/20 border-t-amber-500 animate-spin mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-700">Loading Examination Records...</p>
+              </div>
+            ) : adminExams.length === 0 ? (
+              <div className="py-12 px-4 text-center space-y-2">
+                <Award className="w-10 h-10 text-slate-300 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-800">No Examination Records Found</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  {examSearch
+                    ? 'No candidate submissions matched your search query.'
+                    : 'No exam attempts recorded yet. Completed candidate exams will appear here automatically.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* MOBILE RESPONSIVE CARDS VIEW (block on mobile screens <768px, hidden on desktop) */}
+                <div className="block md:hidden p-3 space-y-2.5 max-h-[550px] overflow-y-auto divide-y divide-slate-100">
+                  {adminExams.map((ex) => {
+                    const examDate = new Date(ex.submittedAt || ex.createdAt || Date.now());
+                    const formattedDate = !isNaN(examDate.getTime())
+                      ? examDate.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : 'N/A';
+
+                    return (
+                      <div key={ex._id} className="pt-2.5 first:pt-0 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs sm:text-sm text-slate-900 truncate">{ex.studentName}</p>
+                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                              {[ex.studentRollNo, ex.studentClass].filter(Boolean).join(' • ') || 'N/A'}
+                            </p>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                              ex.summary?.passed
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}
+                          >
+                            {ex.summary?.grade || (ex.summary?.passed ? 'Pass' : 'Fail')}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-slate-700">
+                          <p className="font-semibold truncate">{ex.subjectId?.name || ex.title}</p>
+                          {ex.bookId?.title && (
+                            <p className="text-[10px] text-slate-400 truncate">{ex.bookId.title}</p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>{formattedDate}</span>
+                          <span className="font-bold text-slate-900">
+                            Score: {ex.summary?.obtainedMarks ?? '-'}/{ex.summary?.totalQuestions ?? '-'} ({ex.summary?.percentage ?? 0}%)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => handlePrintAdminExam(ex)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition cursor-pointer"
+                            title="Print certified result sheet for this candidate"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Print Sheet</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExamToDelete(ex)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                            title="Delete this candidate exam record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* DESKTOP TABLE VIEW (hidden on mobile, visible on md and up) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                        <th className="py-2.5 px-3">Candidate</th>
+                        <th className="py-2.5 px-3">Class / Roll No</th>
+                        <th className="py-2.5 px-3">Subject / Module</th>
+                        <th className="py-2.5 px-3">Date Conducted</th>
+                        <th className="py-2.5 px-3 text-center">Score</th>
+                        <th className="py-2.5 px-3 text-center">Percentage</th>
+                        <th className="py-2.5 px-3 text-center">Grade</th>
+                        <th className="py-2.5 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {adminExams.map((ex) => (
+                        <tr key={ex._id} className="hover:bg-slate-50/70 transition">
+                          <td className="py-3 px-3 font-semibold text-slate-900">
+                            {ex.studentName}
+                          </td>
+                          <td className="py-3 px-3 text-slate-600">
+                            {[ex.studentRollNo, ex.studentClass].filter(Boolean).join(' • ') || 'N/A'}
+                          </td>
+                          <td className="py-3 px-3 text-slate-700 font-medium">
+                            <div>{ex.subjectId?.name || ex.title}</div>
+                            {ex.bookId?.title && (
+                              <div className="text-[10px] text-slate-400">{ex.bookId.title}</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                            {new Date(ex.submittedAt || ex.createdAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-slate-800 text-center">
+                            {ex.summary?.obtainedMarks ?? '-'}/{ex.summary?.totalQuestions ?? '-'}
+                          </td>
+                          <td className="py-3 px-3 font-bold text-slate-900 text-center">
+                            {ex.summary?.percentage ?? 0}%
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                ex.summary?.passed
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-red-50 text-red-700 border border-red-200'
+                              }`}
+                            >
+                              {ex.summary?.grade || (ex.summary?.passed ? 'Pass' : 'Fail')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => handlePrintAdminExam(ex)}
+                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition inline-flex items-center gap-1 cursor-pointer mr-2"
+                              title="Print certified result sheet for this candidate"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-amber-500" />
+                              <span className="text-[11px] font-semibold text-slate-700">Print Sheet</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExamToDelete(ex)}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition inline-flex items-center gap-1 cursor-pointer"
+                              title="Delete this candidate exam record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span className="text-[11px] font-semibold">Delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+       * MODAL: EDIT SUBJECT MODAL (Compact & Professional)
        * ================================================================== */}
       {editingSubject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-2.5">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl space-y-3 max-h-[92vh] overflow-y-auto border border-slate-200/90">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
-                <Edit className="w-4 h-4 text-brand-navy" />
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">Update Subject: {editingSubject.name}</h3>
+                <div className="w-8 h-8 rounded-xl bg-brand-navy/10 text-brand-navy flex items-center justify-center shrink-0">
+                  <Edit className="w-4 h-4 text-brand-navy" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate max-w-md">Update Subject: {editingSubject.name}</h3>
+                  <p className="text-[11px] text-slate-500">Modify curriculum settings, book assignment, and publishing status</p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingSubject(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSubject} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Subject Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={editSubjectForm.name}
-                  onChange={e => setEditSubjectForm({ ...editSubjectForm, name: e.target.value })}
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-brand-navy"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Code</label>
+            <form onSubmit={handleUpdateSubject} className="space-y-2.5">
+              {/* Row 1: Subject Name, Code, Program */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Subject Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editSubjectForm.name}
+                    onChange={e => setEditSubjectForm({ ...editSubjectForm, name: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:border-brand-navy"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Code</label>
                   <input
                     type="text"
                     placeholder="e.g. CS-301"
                     value={editSubjectForm.code}
                     onChange={e => setEditSubjectForm({ ...editSubjectForm, code: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
+                <div className="sm:col-span-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
                   <input
                     type="text"
                     placeholder="e.g. BSCS"
                     value={editSubjectForm.programOrClass}
                     onChange={e => setEditSubjectForm({ ...editSubjectForm, programOrClass: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              {/* Row 2: Semester, Year, Language, Status */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
                   <input
                     type="text"
                     placeholder="e.g. 5th"
                     value={editSubjectForm.semester}
                     onChange={e => setEditSubjectForm({ ...editSubjectForm, semester: e.target.value })}
-                    className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Academic Year</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 2026"
+                    value={editSubjectForm.academicYear || '2026'}
+                    onChange={e => setEditSubjectForm({ ...editSubjectForm, academicYear: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
                   <select
                     value={editSubjectForm.language}
                     onChange={e => setEditSubjectForm({ ...editSubjectForm, language: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy"
                   >
                     <option value="en">English</option>
                     <option value="ur">Urdu</option>
@@ -5677,11 +7162,11 @@ function AdminPanel({ adminUser, setAdminUser }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
                   <select
                     value={editSubjectForm.status}
                     onChange={e => setEditSubjectForm({ ...editSubjectForm, status: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-semibold text-slate-800"
                   >
                     <option value="published">Published</option>
                     <option value="draft">Draft</option>
@@ -5690,31 +7175,121 @@ function AdminPanel({ adminUser, setAdminUser }) {
                 </div>
               </div>
 
+              {/* Reference Book & Book Number / Count Configuration */}
+              <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl p-2.5 sm:p-3 space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-200/70 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-brand-navy" />
+                    <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
+                      Curriculum Reference Book & Book Tracking
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">Catalog Table & Examination Alignment</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Books Count *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editSubjectForm.bookCount}
+                      onChange={e => setEditSubjectForm({ ...editSubjectForm, bookCount: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                      placeholder="e.g. 1"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Book No / Vol Code
+                    </label>
+                    <input
+                      type="text"
+                      value={editSubjectForm.bookNumber}
+                      onChange={e => setEditSubjectForm({ ...editSubjectForm, bookNumber: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                      placeholder="e.g. Book 1, Vol-I, or 1"
+                    />
+                  </div>
+                  <div className="sm:col-span-6">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Textbook / Reference Book Title
+                    </label>
+                    <input
+                      type="text"
+                      value={editSubjectForm.bookTitle}
+                      onChange={e => setEditSubjectForm({ ...editSubjectForm, bookTitle: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                      placeholder="e.g. Core Course Textbook"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-7">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Author / Faculty
+                    </label>
+                    <input
+                      type="text"
+                      value={editSubjectForm.bookAuthor}
+                      onChange={e => setEditSubjectForm({ ...editSubjectForm, bookAuthor: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                      placeholder="e.g. Peter Linz / Department Faculty"
+                    />
+                  </div>
+                  <div className="sm:col-span-5">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Edition
+                    </label>
+                    <input
+                      type="text"
+                      value={editSubjectForm.bookEdition}
+                      onChange={e => setEditSubjectForm({ ...editSubjectForm, bookEdition: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                      placeholder="e.g. 6th Edition"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus</label>
                 <textarea
-                  rows={2}
+                  rows={1}
                   value={editSubjectForm.description}
                   onChange={e => setEditSubjectForm({ ...editSubjectForm, description: e.target.value })}
                   placeholder="Outline topics covered in this question bank..."
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingSubject(null)}
-                  className="px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-1.5 sm:py-2 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-2xs disabled:opacity-50"
+                  className="px-4 py-1.5 rounded-lg bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
-                  {loading ? 'Saving...' : 'Save Changes'}
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -5723,124 +7298,488 @@ function AdminPanel({ adminUser, setAdminUser }) {
       )}
 
       {/* ====================================================================
-       * MODAL: ADD NEW SUBJECT
+       * MODAL: COMPACT & PROFESSIONAL CURRICULUM MANAGEMENT (ADD SUBJECT OR BOOK)
        * ================================================================== */}
-      {isCreatingSubject && (
+      {(isCreatingSubject || isCreatingBook) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-2.5">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl space-y-3 max-h-[92vh] overflow-y-auto border border-slate-200/90">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-brand-navy" />
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">Add New Academic Subject</h3>
+                <div className="w-8 h-8 rounded-xl bg-brand-navy/10 text-brand-navy flex items-center justify-center shrink-0">
+                  {addModalTab === 'subject' ? <GraduationCap className="w-4 h-4 text-brand-navy" /> : <BookOpen className="w-4 h-4 text-blue-600" />}
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                    {addModalTab === 'subject' ? 'Add Academic Subject' : 'Add Reference Book'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    {addModalTab === 'subject'
+                      ? 'Configure new curriculum subject & optional reference textbook'
+                      : 'Register a textbook / syllabus module for exam customization'}
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setIsCreatingSubject(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                type="button"
+                onClick={() => { setIsCreatingSubject(false); setIsCreatingBook(false); }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubject} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Subject Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Distributed Database Systems"
-                  value={newSubjectForm.name}
-                  onChange={e => setNewSubjectForm({ ...newSubjectForm, name: e.target.value })}
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-brand-navy"
-                />
-              </div>
+            {/* Segmented Mode Switcher */}
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100/90 border border-slate-200/80 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setAddModalTab('subject')}
+                className={`py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  addModalTab === 'subject'
+                    ? 'bg-brand-navy text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Academic Subject</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddModalTab('book')}
+                className={`py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  addModalTab === 'book'
+                    ? 'bg-brand-navy text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Reference Book</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2">
+            {addModalTab === 'subject' ? (
+              /* ================================================================
+               * FORM A: ADD ACADEMIC SUBJECT
+               * ================================================================ */
+              <form onSubmit={handleCreateSubject} className="space-y-2.5">
+                {/* Row 1: Subject Name, Code, Program */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-6">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Subject Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Distributed Database Systems"
+                      value={newSubjectForm.name}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, name: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CS-402"
+                      value={newSubjectForm.code}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, code: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Program / Class
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. BSCS, ADP"
+                      value={newSubjectForm.programOrClass}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, programOrClass: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Semester, Year, Language, Status */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Semester
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 5th"
+                      value={newSubjectForm.semester}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, semester: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Academic Year
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2026"
+                      value={newSubjectForm.academicYear}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, academicYear: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Language
+                    </label>
+                    <select
+                      value={newSubjectForm.language}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, language: e.target.value })}
+                      className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy"
+                    >
+                      <option value="en">English</option>
+                      <option value="ur">Urdu</option>
+                      <option value="bilingual">Bilingual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={newSubjectForm.status}
+                      onChange={e => setNewSubjectForm({ ...newSubjectForm, status: e.target.value })}
+                      className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-semibold text-slate-800"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 3: Reference Book Box */}
+                <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl p-2.5 sm:p-3 space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-200/70 pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-brand-navy" />
+                      <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
+                        Curriculum Reference Book & Book Number
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">Auto-creates linked book entry</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Books Count *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={newSubjectForm.bookCount}
+                        onChange={e => setNewSubjectForm({ ...newSubjectForm, bookCount: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                        placeholder="1"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Book No / Vol
+                      </label>
+                      <input
+                        type="text"
+                        value={newSubjectForm.bookNumber}
+                        onChange={e => setNewSubjectForm({ ...newSubjectForm, bookNumber: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                        placeholder="e.g. 1 or Book 1"
+                      />
+                    </div>
+                    <div className="sm:col-span-6">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Textbook / Reference Book Title
+                      </label>
+                      <input
+                        type="text"
+                        value={newSubjectForm.bookTitle}
+                        onChange={e => setNewSubjectForm({ ...newSubjectForm, bookTitle: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                        placeholder="e.g. Core Course Textbook"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-7">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Author / Faculty
+                      </label>
+                      <input
+                        type="text"
+                        value={newSubjectForm.bookAuthor}
+                        onChange={e => setNewSubjectForm({ ...newSubjectForm, bookAuthor: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                        placeholder="e.g. Academic Faculty / Department"
+                      />
+                    </div>
+                    <div className="sm:col-span-5">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Edition
+                      </label>
+                      <input
+                        type="text"
+                        value={newSubjectForm.bookEdition}
+                        onChange={e => setNewSubjectForm({ ...newSubjectForm, bookEdition: e.target.value })}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                        placeholder="e.g. 1st Edition"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 4: Description */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Code</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. CS-402"
-                    value={newSubjectForm.code}
-                    onChange={e => setNewSubjectForm({ ...newSubjectForm, code: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Description / Syllabus Outline
+                  </label>
+                  <textarea
+                    rows={1}
+                    value={newSubjectForm.description}
+                    onChange={e => setNewSubjectForm({ ...newSubjectForm, description: e.target.value })}
+                    placeholder="Brief curriculum description or topics covered..."
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <p className="text-[10px] text-slate-400 hidden sm:block">
+                    Additional books can be linked to this subject at any time.
+                  </p>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreatingSubject(false); setIsCreatingBook(false); }}
+                      className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-4 py-1.5 rounded-lg bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {loading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          <span>Create Subject</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              /* ================================================================
+               * FORM B: ADD REFERENCE BOOK
+               * ================================================================ */
+              <form onSubmit={handleCreateBook} className="space-y-2.5">
+                {/* Row 1: Target Subject & Book Number */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-8">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Associated Academic Subject *
+                    </label>
+                    <select
+                      required
+                      value={newBookForm.subjectId}
+                      onChange={e => {
+                        const selSub = subjects.find(s => s._id === e.target.value);
+                        setNewBookForm({
+                          ...newBookForm,
+                          subjectId: e.target.value,
+                          programOrClass: selSub?.programOrClass || newBookForm.programOrClass,
+                          semester: selSub?.semester || newBookForm.semester
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-medium text-slate-900"
+                    >
+                      <option value="">-- Select Target Subject --</option>
+                      {subjects.map(s => (
+                        <option key={s._id} value={s._id}>
+                          {s.name} ({s.code ? `${s.code} • ` : ''}{s.programOrClass || 'General'} {s.semester})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Book No / Volume Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1, Book 1, Vol-I"
+                      value={newBookForm.bookNumber}
+                      onChange={e => setNewBookForm({ ...newBookForm, bookNumber: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Book Title & Edition */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-8">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Book / Module Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Operating System Concepts"
+                      value={newBookForm.title}
+                      onChange={e => setNewBookForm({ ...newBookForm, title: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Edition
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 10th Edition"
+                      value={newBookForm.edition}
+                      onChange={e => setNewBookForm({ ...newBookForm, edition: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Author, Program, Semester */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-6">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Author(s) / Faculty
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Abraham Silberschatz, Peter Baer Galvin"
+                      value={newBookForm.author}
+                      onChange={e => setNewBookForm({ ...newBookForm, author: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Program / Class
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. BSCS"
+                      value={newBookForm.programOrClass}
+                      onChange={e => setNewBookForm({ ...newBookForm, programOrClass: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Semester
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 5th"
+                      value={newBookForm.semester}
+                      onChange={e => setNewBookForm({ ...newBookForm, semester: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 4: Language & Status */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Language
+                    </label>
+                    <select
+                      value={newBookForm.language}
+                      onChange={e => setNewBookForm({ ...newBookForm, language: e.target.value })}
+                      className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy"
+                    >
+                      <option value="en">English</option>
+                      <option value="ur">Urdu</option>
+                      <option value="bilingual">Bilingual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={newBookForm.status}
+                      onChange={e => setNewBookForm({ ...newBookForm, status: e.target.value })}
+                      className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-semibold text-slate-800"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 5: Description */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. BSCS"
-                    value={newSubjectForm.programOrClass}
-                    onChange={e => setNewSubjectForm({ ...newSubjectForm, programOrClass: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Description / Syllabus Chapters
+                  </label>
+                  <textarea
+                    rows={1}
+                    value={newBookForm.description}
+                    onChange={e => setNewBookForm({ ...newBookForm, description: e.target.value })}
+                    placeholder="e.g. Chapters 1-12 covering Processes, Memory Management, CPU Scheduling..."
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 6th"
-                    value={newSubjectForm.semester}
-                    onChange={e => setNewSubjectForm({ ...newSubjectForm, semester: e.target.value })}
-                    className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs"
-                  />
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <p className="text-[10px] text-slate-400 hidden sm:block">
+                    Reference books allow modular syllabus selection in practice & official exams.
+                  </p>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreatingSubject(false); setIsCreatingBook(false); }}
+                      className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-4 py-1.5 rounded-lg bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {loading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>Create Reference Book</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
-                  <select
-                    value={newSubjectForm.language}
-                    onChange={e => setNewSubjectForm({ ...newSubjectForm, language: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                  >
-                    <option value="en">English</option>
-                    <option value="ur">Urdu</option>
-                    <option value="bilingual">Bilingual</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
-                  <select
-                    value={newSubjectForm.status}
-                    onChange={e => setNewSubjectForm({ ...newSubjectForm, status: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                  >
-                    <option value="published">Published</option>
-                    <option value="draft">Draft</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus</label>
-                <textarea
-                  rows={2}
-                  value={newSubjectForm.description}
-                  onChange={e => setNewSubjectForm({ ...newSubjectForm, description: e.target.value })}
-                  placeholder="Outline syllabus topics..."
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingSubject(false)}
-                  className="px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-1.5 sm:py-2 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-2xs disabled:opacity-50"
-                >
-                  {loading ? 'Creating...' : 'Create Subject'}
-                </button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -5942,263 +7881,145 @@ function AdminPanel({ adminUser, setAdminUser }) {
         </div>
       )}
 
-      {/* ====================================================================
-       * MODAL: ADD NEW REFERENCE BOOK
-       * ================================================================== */}
-      {isCreatingBook && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-2.5">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-brand-navy" />
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">Add Academic Reference Book</h3>
-              </div>
-              <button
-                onClick={() => setIsCreatingBook(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <form onSubmit={handleCreateBook} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Book Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Operating System Concepts"
-                  value={newBookForm.title}
-                  onChange={e => setNewBookForm({ ...newBookForm, title: e.target.value })}
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-brand-navy"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Associated Academic Subject *</label>
-                <select
-                  required
-                  value={newBookForm.subjectId}
-                  onChange={e => {
-                    const selSub = subjects.find(s => s._id === e.target.value);
-                    setNewBookForm({
-                      ...newBookForm,
-                      subjectId: e.target.value,
-                      programOrClass: selSub?.programOrClass || newBookForm.programOrClass,
-                      semester: selSub?.semester || newBookForm.semester
-                    });
-                  }}
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white"
-                >
-                  <option value="">-- Select Subject --</option>
-                  {subjects.map(s => (
-                    <option key={s._id} value={s._id}>
-                      {s.name} ({s.programOrClass || 'General'} {s.semester})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Author(s)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Abraham Silberschatz, Peter Baer Galvin"
-                    value={newBookForm.author}
-                    onChange={e => setNewBookForm({ ...newBookForm, author: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Edition</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 10th Edition"
-                    value={newBookForm.edition}
-                    onChange={e => setNewBookForm({ ...newBookForm, edition: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. BSCS"
-                    value={newBookForm.programOrClass}
-                    onChange={e => setNewBookForm({ ...newBookForm, programOrClass: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 5th"
-                    value={newBookForm.semester}
-                    onChange={e => setNewBookForm({ ...newBookForm, semester: e.target.value })}
-                    className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
-                  <select
-                    value={newBookForm.language}
-                    onChange={e => setNewBookForm({ ...newBookForm, language: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                  >
-                    <option value="en">English</option>
-                    <option value="ur">Urdu</option>
-                    <option value="bilingual">Bilingual</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
-                  <select
-                    value={newBookForm.status}
-                    onChange={e => setNewBookForm({ ...newBookForm, status: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
-                  >
-                    <option value="published">Published</option>
-                    <option value="draft">Draft</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus Chapters</label>
-                <textarea
-                  rows={2}
-                  value={newBookForm.description}
-                  onChange={e => setNewBookForm({ ...newBookForm, description: e.target.value })}
-                  placeholder="e.g. Chapters 1-12 covering Processes, CPU Scheduling, Deadlocks, Memory Management..."
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingBook(false)}
-                  className="px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-1.5 sm:py-2 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-2xs disabled:opacity-50 cursor-pointer"
-                >
-                  {loading ? 'Creating...' : 'Create Reference Book'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ====================================================================
-       * MODAL: EDIT REFERENCE BOOK
+       * MODAL: EDIT REFERENCE BOOK (Compact & Professional)
        * ================================================================== */}
       {editingBook && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-2.5">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl space-y-3 max-h-[92vh] overflow-y-auto border border-slate-200/90">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
-                <Edit className="w-4 h-4 text-brand-navy" />
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">Update Book: {editingBook.title}</h3>
+                <div className="w-8 h-8 rounded-xl bg-brand-navy/10 text-brand-navy flex items-center justify-center shrink-0">
+                  <Edit className="w-4 h-4 text-brand-navy" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate max-w-md">Update Book: {editingBook.title}</h3>
+                  <p className="text-[11px] text-slate-500">Edit textbook details, volume numbering, and curriculum association</p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingBook(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateBook} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Book Title *</label>
-                <input
-                  type="text"
-                  required
-                  value={editBookForm.title}
-                  onChange={e => setEditBookForm({ ...editBookForm, title: e.target.value })}
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-brand-navy"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Associated Academic Subject</label>
-                <select
-                  value={editBookForm.subjectId}
-                  onChange={e => setEditBookForm({ ...editBookForm, subjectId: e.target.value })}
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm bg-white"
-                >
-                  <option value="">-- Retain Current Subject --</option>
-                  {subjects.map(s => (
-                    <option key={s._id} value={s._id}>
-                      {s.name} ({s.programOrClass || 'General'} {s.semester})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Author(s)</label>
+            <form onSubmit={handleUpdateBook} className="space-y-2.5">
+              {/* Row 1: Target Subject & Book Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <div className="sm:col-span-8">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Associated Academic Subject
+                  </label>
+                  <select
+                    value={editBookForm.subjectId}
+                    onChange={e => setEditBookForm({ ...editBookForm, subjectId: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-medium text-slate-900"
+                  >
+                    <option value="">-- Retain Current Subject --</option>
+                    {subjects.map(s => (
+                      <option key={s._id} value={s._id}>
+                        {s.name} ({s.code ? `${s.code} • ` : ''}{s.programOrClass || 'General'} {s.semester})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Book No / Volume Code
+                  </label>
                   <input
                     type="text"
-                    value={editBookForm.author}
-                    onChange={e => setEditBookForm({ ...editBookForm, author: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                    placeholder="e.g. 1, Book 1, Vol-I"
+                    value={editBookForm.bookNumber}
+                    onChange={e => setEditBookForm({ ...editBookForm, bookNumber: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-brand-navy"
                   />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Edition</label>
+              </div>
+
+              {/* Row 2: Book Title & Edition */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <div className="sm:col-span-8">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Book / Module Title *
+                  </label>
                   <input
                     type="text"
+                    required
+                    value={editBookForm.title}
+                    onChange={e => setEditBookForm({ ...editBookForm, title: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:border-brand-navy"
+                  />
+                </div>
+                <div className="sm:col-span-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Edition
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 10th Edition"
                     value={editBookForm.edition}
                     onChange={e => setEditBookForm({ ...editBookForm, edition: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Program / Class</label>
+              {/* Row 3: Author, Program, Semester */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Author(s) / Faculty
+                  </label>
                   <input
                     type="text"
+                    placeholder="e.g. Abraham Silberschatz, Peter Baer Galvin"
+                    value={editBookForm.author}
+                    onChange={e => setEditBookForm({ ...editBookForm, author: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Program / Class
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. BSCS"
                     value={editBookForm.programOrClass}
                     onChange={e => setEditBookForm({ ...editBookForm, programOrClass: e.target.value })}
-                    className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Semester</label>
+                <div className="sm:col-span-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Semester
+                  </label>
                   <input
                     type="text"
+                    placeholder="e.g. 5th"
                     value={editBookForm.semester}
                     onChange={e => setEditBookForm({ ...editBookForm, semester: e.target.value })}
-                    className="w-full px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs sm:text-sm"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                   />
                 </div>
               </div>
 
+              {/* Row 4: Language & Status */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Language</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Language
+                  </label>
                   <select
                     value={editBookForm.language}
                     onChange={e => setEditBookForm({ ...editBookForm, language: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy"
                   >
                     <option value="en">English</option>
                     <option value="ur">Urdu</option>
@@ -6206,11 +8027,13 @@ function AdminPanel({ adminUser, setAdminUser }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Status</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Status
+                  </label>
                   <select
                     value={editBookForm.status}
                     onChange={e => setEditBookForm({ ...editBookForm, status: e.target.value })}
-                    className="w-full px-2 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:border-brand-navy font-semibold text-slate-800"
                   >
                     <option value="published">Published</option>
                     <option value="draft">Draft</option>
@@ -6218,37 +8041,136 @@ function AdminPanel({ adminUser, setAdminUser }) {
                 </div>
               </div>
 
+              {/* Row 5: Description */}
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Description / Syllabus Chapters</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Description / Syllabus Chapters
+                </label>
                 <textarea
-                  rows={2}
+                  rows={1}
                   value={editBookForm.description}
                   onChange={e => setEditBookForm({ ...editBookForm, description: e.target.value })}
                   placeholder="Outline syllabus topics or chapters..."
-                  className="w-full px-3 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-brand-navy"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingBook(null)}
-                  className="px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-1.5 sm:py-2 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-2xs disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg bg-brand-navy text-white text-xs font-bold hover:bg-brand-navyDark shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
-                  {loading ? 'Saving...' : 'Save Changes'}
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* ====================================================================
+       * MODAL: CONFIRM SINGLE EXAM DELETION
+       * ================================================================== */}
+      {examToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Delete Examination Record?</h3>
+                <p className="text-xs text-slate-500">Candidate: <span className="font-semibold text-slate-800">{examToDelete.studentName}</span></p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to permanently delete this examination record for <strong>{examToDelete.subjectId?.name || examToDelete.title}</strong>? This action cannot be undone.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setExamToDelete(null)}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingExam}
+                onClick={() => handleDeleteSingleExam(examToDelete._id)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingExam ? 'Deleting...' : 'Delete Record'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+       * MODAL: CONFIRM CLEAR ALL EXAMS COMPLETELY
+       * ================================================================== */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-[2px] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Clear All Examination Submissions?</h3>
+                <p className="text-xs text-slate-500">Permanent Database Purge</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              This will permanently delete <strong>all candidate examination submissions</strong> recorded in the database. The "Recent Examination Submissions" roster on the homepage will be completely cleared.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowClearAllModal(false)}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isClearingAllExams}
+                onClick={handleClearAllExams}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isClearingAllExams ? 'Clearing All...' : 'Yes, Clear All Records'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printable individual exam sheet for admin printing */}
+      <PrintableExamSheet exam={adminExamToPrint} exams={adminExamsToPrint} />
     </div>
   );
 }

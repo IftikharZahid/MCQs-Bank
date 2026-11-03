@@ -9,12 +9,21 @@ export const startExamThunk = createAsyncThunk(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return rejectWithValue(data.message || 'Could not start examination session');
+      const text = await res.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        console.error('[Exam] Non-JSON response from /api/exams/start:', text);
+        return rejectWithValue(`Server communication error (${res.status || 'Unknown'}). Please check server connection.`);
+      }
+
+      if (!res.ok || !data?.success) {
+        return rejectWithValue(data?.message || `Could not start examination session (HTTP ${res.status})`);
       }
       return data;
     } catch (err) {
+      console.error('[Exam] Network error starting exam:', err);
       return rejectWithValue(err.message || 'Network error starting examination');
     }
   }
@@ -29,12 +38,21 @@ export const submitExamThunk = createAsyncThunk(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers })
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return rejectWithValue(data.message || 'Failed to submit examination');
+      const text = await res.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        console.error('[Exam] Non-JSON response from /api/exams/submit:', text);
+        return rejectWithValue(`Server communication error (${res.status || 'Unknown'}). Please check server connection.`);
+      }
+
+      if (!res.ok || !data?.success) {
+        return rejectWithValue(data?.message || `Failed to submit examination (HTTP ${res.status})`);
       }
       return data.data;
     } catch (err) {
+      console.error('[Exam] Network error submitting exam:', err);
       return rejectWithValue(err.message || 'Network error submitting examination');
     }
   }

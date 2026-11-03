@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import Subject from '../models/Subject.js';
 import Book from '../models/Book.js';
 import Question from '../models/Question.js';
@@ -98,7 +99,9 @@ router.get('/subjects', async (req, res) => {
     const enriched = subjects.map(sub => ({
       ...sub,
       questionCount: qCountMap.get(String(sub._id)) || 0,
-      bookCount: bCountMap.get(String(sub._id)) || 0
+      bookCount: (sub.bookCount !== undefined && sub.bookCount !== null)
+        ? sub.bookCount
+        : (bCountMap.get(String(sub._id)) || 0)
     }));
 
     res.json({ success: true, data: enriched });
@@ -147,12 +150,61 @@ router.get('/books', async (req, res) => {
   }
 });
 
+router.get('/questions/weeks', async (req, res) => {
+  try {
+    const { subjectId, bookId } = req.query;
+    const filter = { status: 'published', week: { $exists: true, $ne: '' } };
+    if (subjectId) {
+      try {
+        filter.subjectId = mongoose.Types.ObjectId.isValid(subjectId) ? new mongoose.Types.ObjectId(subjectId) : subjectId;
+      } catch (_) {}
+    }
+    if (bookId) {
+      try {
+        filter.bookId = mongoose.Types.ObjectId.isValid(bookId) ? new mongoose.Types.ObjectId(bookId) : bookId;
+      } catch (_) {}
+    }
+    const rawWeeks = await Question.distinct('week', filter);
+    const set = new Set();
+    const result = [];
+    rawWeeks.map(w => String(w).trim()).filter(Boolean).forEach(w => {
+      const num = parseInt(w.replace(/\D/g, ''), 10);
+      const key = num ? `Week ${num}` : w;
+      if (!set.has(key)) {
+        set.add(key);
+        result.push({
+          value: num ? String(num) : w,
+          label: key,
+          weekNumber: num || 0
+        });
+      }
+    });
+    result.sort((a, b) => a.weekNumber - b.weekNumber);
+    res.json({ success: true, weeks: result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message, weeks: [] });
+  }
+});
+
 router.get('/questions', async (req, res) => {
-  const { subjectId, bookId, chapter, difficulty, language, search, page = 1, limit = 50 } = req.query;
+  const { subjectId, bookId, week, chapter, difficulty, language, search, page = 1, limit = 50 } = req.query;
   const filter = { status: 'published' };
   if (subjectId) filter.subjectId = subjectId;
   if (bookId) filter.bookId = bookId;
   if (chapter) filter.chapter = chapter;
+  if (week && week !== 'all') {
+    const numOnly = String(week).replace(/\D/g, '');
+    if (numOnly) {
+      filter.$or = [
+        { week: String(week) },
+        { week: numOnly },
+        { week: `Week ${numOnly}` },
+        { week: `week ${numOnly}` }
+      ];
+    } else {
+      filter.week = String(week);
+    }
+  }
   if (difficulty) filter.difficulty = difficulty;
   if (language) filter.language = language;
   if (search) filter.question = { $regex: search, $options: 'i' };
@@ -176,125 +228,206 @@ router.get('/questions', async (req, res) => {
 
 // 2. Examination & Authoritative Grading Routes
 router.post('/exams/start', async (req, res) => {
-  const {
-    subjectId,
-    bookId,
-    questionCount = 10,
-    durationMinutes = 15,
-    passingPercentage = 50,
-    studentName,
-    studentClass,
-    studentRollNo,
-    studentInstitution
-  } = req.body;
-  const matchStage = { status: 'published' };
-  if (subjectId) {
-    try {
-      matchStage.subjectId = new Subject.base.Types.ObjectId(subjectId);
-    } catch (_) {}
+  try {
+    const {
+      subjectId,
+      bookId,
+      week,
+      questionCount = 10,
+      durationMinutes = 15,
+      passingPercentage = 50,
+      studentName,
+      studentClass,
+      studentRollNo,
+      studentInstitution
+    } = req.body;
+
+    const matchStage = { status: 'published' };
+    if (subjectId) {
+      try {
+        matchStage.subjectId = mongoose.Types.ObjectId.isValid(subjectId)
+          ? new mongoose.Types.ObjectId(subjectId)
+          : subjectId;
+      } catch (_) {}
+    }
+    if (bookId) {
+      try {
+        matchStage.bookId = mongoose.Types.ObjectId.isValid(bookId)
+          ? new mongoose.Types.ObjectId(bookId)
+          : bookId;
+      } catch (_) {}
+    }
+
+    if (week && week !== 'all' && String(week).trim()) {
+      const cleanWeek = String(week).trim();
+      const numOnly = cleanWeek.replace(/[^0-9]/g, '');
+      const variants = [cleanWeek];
+      if (numOnly) {
+        variants.push(numOnly, `Week ${numOnly}`, `week ${numOnly}`, `W${numOnly}`, `W-${numOnly}`);
+      }
+      matchStage.$or = variants.map(w => ({ week: new RegExp(`^${w}$`, 'i') }));
+    }
+
+    let sampledQuestions = await Question.aggregate([
+      { $match: matchStage },
+      { $sample: { size: Math.min(Number(questionCount), 100) } }
+    ]);
+
+    // If week filter was provided and yielded questions but fewer than requested, supplement with other questions from book/subject
+    if (sampledQuestions.length < Number(questionCount) && week && week !== 'all') {
+      try {
+        const existingIds = sampledQuestions.map(q => q._id);
+        const remainingCount = Number(questionCount) - sampledQuestions.length;
+        const supplementalMatch = { status: 'published', _id: { $nin: existingIds } };
+        if (matchStage.subjectId) supplementalMatch.subjectId = matchStage.subjectId;
+        if (matchStage.bookId) supplementalMatch.bookId = matchStage.bookId;
+
+        const extraQuestions = await Question.aggregate([
+          { $match: supplementalMatch },
+          { $sample: { size: remainingCount } }
+        ]);
+        sampledQuestions = [...sampledQuestions, ...extraQuestions];
+      } catch (_) {}
+    }
+
+    // Graceful fallback: If specific book has 0 published questions, fall back to subject-level published questions
+    if (sampledQuestions.length === 0 && bookId && subjectId) {
+      try {
+        const subOid = mongoose.Types.ObjectId.isValid(subjectId)
+          ? new mongoose.Types.ObjectId(subjectId)
+          : subjectId;
+        sampledQuestions = await Question.aggregate([
+          { $match: { subjectId: subOid, status: 'published' } },
+          { $sample: { size: Math.min(Number(questionCount), 100) } }
+        ]);
+      } catch (_) {}
+    }
+
+    // Secondary fallback: if still 0 questions, check if questions exist without strict status filter
+    if (sampledQuestions.length === 0 && (bookId || subjectId)) {
+      try {
+        const relaxedMatch = {};
+        if (bookId && mongoose.Types.ObjectId.isValid(bookId)) {
+          relaxedMatch.bookId = new mongoose.Types.ObjectId(bookId);
+        } else if (subjectId && mongoose.Types.ObjectId.isValid(subjectId)) {
+          relaxedMatch.subjectId = new mongoose.Types.ObjectId(subjectId);
+        }
+        sampledQuestions = await Question.aggregate([
+          { $match: relaxedMatch },
+          { $sample: { size: Math.min(Number(questionCount), 100) } }
+        ]);
+      } catch (_) {}
+    }
+
+    if (sampledQuestions.length === 0) {
+      return res.status(400).json({ success: false, message: 'No questions found for the selected subject/book.' });
+    }
+
+    const subject = await Subject.findById(sampledQuestions[0].subjectId);
+    const weekLabel = week && week !== 'all' ? ` (Week ${String(week).replace(/\D/g, '') || week})` : '';
+    const attempt = await ExamAttempt.create({
+      title: `${subject ? subject.name : 'Academic'} Examination${weekLabel}`,
+      subjectId: sampledQuestions[0].subjectId,
+      bookId: bookId || null,
+      week: week && week !== 'all' ? String(week) : '',
+      studentName: studentName || 'Candidate',
+      studentClass: studentClass || '',
+      studentRollNo: studentRollNo || '',
+      studentInstitution: studentInstitution || '',
+      durationMinutes: Number(durationMinutes),
+      passingPercentage: Number(passingPercentage),
+      items: sampledQuestions.map(q => ({ questionId: q._id, selectedOption: null, isCorrect: false }))
+    });
+
+    const clientSafeQuestions = sampledQuestions.map(q => ({
+      _id: q._id,
+      question: q.question,
+      options: q.options,
+      difficulty: q.difficulty,
+      language: q.language,
+      chapter: q.chapter,
+      week: q.week
+    }));
+
+    return res.status(201).json({
+      success: true,
+      attemptId: attempt._id,
+      title: attempt.title,
+      week: attempt.week,
+      startedAt: attempt.startedAt,
+      durationMinutes: attempt.durationMinutes,
+      questions: clientSafeQuestions
+    });
+  } catch (err) {
+    console.error('[API /exams/start Error]:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Server error creating examination session.'
+    });
   }
-  if (bookId) {
-    try {
-      matchStage.bookId = new Book.base.Types.ObjectId(bookId);
-    } catch (_) {}
-  }
-
-  let sampledQuestions = await Question.aggregate([
-    { $match: matchStage },
-    { $sample: { size: Math.min(Number(questionCount), 100) } }
-  ]);
-
-  // Graceful fallback: If specific book has 0 published questions, fall back to subject-level published questions
-  if (sampledQuestions.length === 0 && bookId && subjectId) {
-    try {
-      sampledQuestions = await Question.aggregate([
-        { $match: { subjectId: new Subject.base.Types.ObjectId(subjectId), status: 'published' } },
-        { $sample: { size: Math.min(Number(questionCount), 100) } }
-      ]);
-    } catch (_) {}
-  }
-
-  if (sampledQuestions.length === 0) {
-    return res.status(400).json({ success: false, message: 'No published questions found for this selection.' });
-  }
-
-  const subject = await Subject.findById(sampledQuestions[0].subjectId);
-  const attempt = await ExamAttempt.create({
-    title: `${subject ? subject.name : 'Academic'} Examination`,
-    subjectId: sampledQuestions[0].subjectId,
-    bookId: bookId || null,
-    studentName: studentName || 'Candidate',
-    studentClass: studentClass || '',
-    studentRollNo: studentRollNo || '',
-    studentInstitution: studentInstitution || '',
-    durationMinutes: Number(durationMinutes),
-    passingPercentage: Number(passingPercentage),
-    items: sampledQuestions.map(q => ({ questionId: q._id, selectedOption: null, isCorrect: false }))
-  });
-
-  const clientSafeQuestions = sampledQuestions.map(q => ({
-    _id: q._id,
-    question: q.question,
-    options: q.options,
-    difficulty: q.difficulty,
-    language: q.language,
-    chapter: q.chapter
-  }));
-
-  res.status(201).json({
-    success: true,
-    attemptId: attempt._id,
-    startedAt: attempt.startedAt,
-    durationMinutes: attempt.durationMinutes,
-    questions: clientSafeQuestions
-  });
 });
 
 router.post('/exams/:attemptId/submit', async (req, res) => {
-  const { answers = {} } = req.body;
-  const attempt = await ExamAttempt.findById(req.params.attemptId).populate('items.questionId');
-  if (!attempt) return res.status(404).json({ success: false, message: 'Exam session not found' });
+  try {
+    const { answers = {} } = req.body;
+    const attempt = await ExamAttempt.findById(req.params.attemptId).populate('items.questionId');
+    if (!attempt) return res.status(404).json({ success: false, message: 'Exam session not found' });
 
-  let correct = 0;
-  let answered = 0;
+    let correct = 0;
+    let answered = 0;
 
-  attempt.items = attempt.items.map(item => {
-    const qId = item.questionId._id.toString();
-    const userSelection = answers[qId] !== undefined && answers[qId] !== null ? Number(answers[qId]) : null;
-    const isCorrect = userSelection !== null && userSelection === item.questionId.correctAnswer;
-    if (userSelection !== null) answered++;
-    if (isCorrect) correct++;
-    return { questionId: item.questionId._id, selectedOption: userSelection, isCorrect };
-  });
+    attempt.items = attempt.items.map(item => {
+      if (!item.questionId) {
+        return { questionId: item.questionId, selectedOption: null, isCorrect: false };
+      }
+      const qId = item.questionId._id ? item.questionId._id.toString() : String(item.questionId);
+      const userSelection = answers[qId] !== undefined && answers[qId] !== null ? Number(answers[qId]) : null;
+      const isCorrect = userSelection !== null && userSelection === item.questionId.correctAnswer;
+      if (userSelection !== null) answered++;
+      if (isCorrect) correct++;
+      return { questionId: item.questionId._id || item.questionId, selectedOption: userSelection, isCorrect };
+    });
 
-  const totalQuestions = attempt.items.length;
-  const unanswered = totalQuestions - answered;
-  const incorrect = answered - correct;
-  const percentage = totalQuestions > 0 ? Number(((correct / totalQuestions) * 100).toFixed(2)) : 0;
-  const accuracyRate = answered > 0 ? Number(((correct / answered) * 100).toFixed(2)) : 0;
-  const passed = percentage >= attempt.passingPercentage;
-  const grade = percentage >= 85 ? 'A+' : percentage >= 75 ? 'A' : percentage >= 65 ? 'B' : percentage >= 50 ? 'C' : 'F';
+    const totalQuestions = attempt.items.length;
+    const unanswered = totalQuestions - answered;
+    const incorrect = answered - correct;
+    const percentage = totalQuestions > 0 ? Number(((correct / totalQuestions) * 100).toFixed(2)) : 0;
+    const accuracyRate = answered > 0 ? Number(((correct / answered) * 100).toFixed(2)) : 0;
+    const passed = percentage >= attempt.passingPercentage;
+    const grade = percentage >= 85 ? 'A+' : percentage >= 75 ? 'A' : percentage >= 65 ? 'B' : percentage >= 50 ? 'C' : 'F';
 
-  attempt.status = 'submitted';
-  attempt.submittedAt = new Date();
-  attempt.summary = { totalQuestions, answered, unanswered, correct, incorrect, obtainedMarks: correct, percentage, accuracyRate, passed, grade };
-  await attempt.save();
+    attempt.status = 'submitted';
+    attempt.submittedAt = new Date();
+    attempt.summary = { totalQuestions, answered, unanswered, correct, incorrect, obtainedMarks: correct, percentage, accuracyRate, passed, grade };
+    await attempt.save();
 
-  const populatedResult = await ExamAttempt.findById(attempt._id)
-    .populate('subjectId', 'name code programOrClass')
-    .populate('bookId', 'title')
-    .populate('items.questionId');
+    const populatedResult = await ExamAttempt.findById(attempt._id)
+      .populate('subjectId', 'name code programOrClass')
+      .populate('bookId', 'title')
+      .populate('items.questionId');
 
-  res.json({ success: true, data: populatedResult });
+    return res.json({ success: true, data: populatedResult });
+  } catch (err) {
+    console.error('[API /exams/:attemptId/submit Error]:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Server error grading examination attempt.'
+    });
+  }
 });
 
 router.get('/exams/recent', async (req, res) => {
-  const recent = await ExamAttempt.find({ status: 'submitted' })
-    .populate('subjectId', 'name')
-    .sort({ submittedAt: -1 })
-    .limit(10)
-    .lean();
-  res.json({ success: true, data: recent });
+  try {
+    const recent = await ExamAttempt.find({ status: 'submitted' })
+      .populate('subjectId', 'name')
+      .sort({ submittedAt: -1 })
+      .limit(10)
+      .lean();
+    return res.json({ success: true, data: recent || [] });
+  } catch (err) {
+    console.error('[API /exams/recent Error]:', err);
+    return res.status(500).json({ success: false, data: [], message: err.message || 'Error fetching recent exams' });
+  }
 });
 
 // 3. Admin Panel Protected Routes
@@ -385,11 +518,27 @@ router.get('/admin/subjects', requireAuth, async (req, res) => {
 
   const subjects = await Subject.find(filter).sort({ updatedAt: -1 }).lean();
   const enriched = await Promise.all(subjects.map(async (sub) => {
-    const [questionCount, bookCount] = await Promise.all([
+    const [questionCount, actualBookCount, primaryBook] = await Promise.all([
       Question.countDocuments({ subjectId: sub._id }),
-      Book.countDocuments({ subjectId: sub._id })
+      Book.countDocuments({ subjectId: sub._id }),
+      Book.findOne({ subjectId: sub._id }).sort({ createdAt: 1 }).lean()
     ]);
-    return { ...sub, questionCount, bookCount };
+    const bookCount = (sub.bookCount !== undefined && sub.bookCount !== null)
+      ? sub.bookCount
+      : actualBookCount;
+    return {
+      ...sub,
+      questionCount,
+      bookCount,
+      actualBookCount,
+      primaryBook: primaryBook ? {
+        _id: primaryBook._id,
+        title: primaryBook.title,
+        bookNumber: primaryBook.bookNumber || '',
+        author: primaryBook.author || '',
+        edition: primaryBook.edition || ''
+      } : null
+    };
   }));
 
   res.json({ success: true, data: enriched });
@@ -397,7 +546,21 @@ router.get('/admin/subjects', requireAuth, async (req, res) => {
 
 // Admin Subjects: Create New
 router.post('/admin/subjects', requireAuth, async (req, res) => {
-  const { name, code, description, programOrClass, semester, academicYear, language, status } = req.body;
+  const {
+    name,
+    code,
+    description,
+    programOrClass,
+    semester,
+    academicYear,
+    language,
+    status,
+    bookCount,
+    bookNumber,
+    bookTitle,
+    bookAuthor,
+    bookEdition
+  } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ success: false, message: 'Subject name is required.' });
   }
@@ -416,8 +579,34 @@ router.post('/admin/subjects', requireAuth, async (req, res) => {
     semester: semester || '',
     academicYear: academicYear || '2026',
     language: language || 'en',
-    status: status || 'published'
+    status: status || 'published',
+    bookCount: (bookCount !== undefined && bookCount !== '' && bookCount !== null)
+      ? Math.max(0, parseInt(bookCount, 10) || 0)
+      : null
   });
+
+  // Automatically create reference book if book details are supplied
+  const hasBookInfo = (bookTitle && bookTitle.trim()) || (bookNumber && bookNumber.trim());
+  if (hasBookInfo) {
+    const finalTitle = (bookTitle && bookTitle.trim()) || `${created.name} - Official Syllabus Book`;
+    await Book.create({
+      title: finalTitle,
+      bookNumber: bookNumber ? bookNumber.trim() : '1',
+      subjectId: created._id,
+      author: bookAuthor ? bookAuthor.trim() : (created.name ? `${created.name} Faculty` : 'Academic Faculty'),
+      edition: bookEdition ? bookEdition.trim() : 'Standard Edition',
+      programOrClass: created.programOrClass || 'General',
+      semester: created.semester || '',
+      academicYear: created.academicYear || '2026',
+      language: created.language || 'en',
+      status: created.status || 'published'
+    });
+    if (created.bookCount === null || created.bookCount === 0) {
+      created.bookCount = 1;
+      await created.save();
+    }
+  }
+
   SERVER_CACHE.invalidate();
   res.status(201).json({ success: true, data: created });
 });
@@ -426,7 +615,21 @@ router.post('/admin/subjects', requireAuth, async (req, res) => {
 router.put('/admin/subjects/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, code, description, programOrClass, semester, academicYear, language, status } = req.body;
+    const {
+      name,
+      code,
+      description,
+      programOrClass,
+      semester,
+      academicYear,
+      language,
+      status,
+      bookCount,
+      bookNumber,
+      bookTitle,
+      bookAuthor,
+      bookEdition
+    } = req.body;
 
     const subject = await Subject.findById(id);
     if (!subject) {
@@ -448,11 +651,64 @@ router.put('/admin/subjects/:id', requireAuth, async (req, res) => {
     if (language !== undefined) subject.language = language;
     if (status !== undefined) subject.status = status;
 
+    if (bookCount !== undefined) {
+      subject.bookCount = (bookCount === '' || bookCount === null) ? null : Math.max(0, parseInt(bookCount, 10) || 0);
+    }
+
+    // Sync reference book information
+    let syncedBook = null;
+    const hasBookInfo = (bookTitle && bookTitle.trim()) || (bookNumber && bookNumber.trim());
+    if (hasBookInfo) {
+      let existingBook = await Book.findOne({ subjectId: id }).sort({ createdAt: 1 });
+      const finalTitle = (bookTitle && bookTitle.trim()) || (existingBook ? existingBook.title : `${subject.name} - Official Syllabus Book`);
+
+      if (existingBook) {
+        if (bookTitle && bookTitle.trim()) existingBook.title = bookTitle.trim();
+        if (bookNumber !== undefined) existingBook.bookNumber = bookNumber.trim();
+        if (bookAuthor !== undefined) existingBook.author = bookAuthor.trim();
+        if (bookEdition !== undefined) existingBook.edition = bookEdition.trim();
+        existingBook.contentVersion = (existingBook.contentVersion || 1) + 1;
+        await existingBook.save();
+        syncedBook = existingBook;
+      } else {
+        syncedBook = await Book.create({
+          title: finalTitle,
+          bookNumber: bookNumber ? bookNumber.trim() : '1',
+          subjectId: id,
+          author: bookAuthor ? bookAuthor.trim() : (subject.name ? `${subject.name} Faculty` : 'Academic Faculty'),
+          edition: bookEdition ? bookEdition.trim() : 'Standard Edition',
+          programOrClass: subject.programOrClass || 'General',
+          semester: subject.semester || '',
+          academicYear: subject.academicYear || '2026',
+          language: subject.language || 'en',
+          status: subject.status || 'published'
+        });
+      }
+
+      if (subject.bookCount === null || subject.bookCount === undefined || subject.bookCount === 0) {
+        subject.bookCount = 1;
+      }
+    }
+
     subject.contentVersion = (subject.contentVersion || 1) + 1;
     await subject.save();
     SERVER_CACHE.invalidate();
 
-    res.json({ success: true, message: 'Subject updated successfully', data: subject });
+    res.json({
+      success: true,
+      message: 'Subject updated successfully',
+      data: {
+        ...subject.toObject(),
+        bookCount: (subject.bookCount !== undefined && subject.bookCount !== null) ? subject.bookCount : (syncedBook ? 1 : 0),
+        primaryBook: syncedBook ? {
+          _id: syncedBook._id,
+          title: syncedBook.title,
+          bookNumber: syncedBook.bookNumber || '',
+          author: syncedBook.author || '',
+          edition: syncedBook.edition || ''
+        } : null
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -516,7 +772,7 @@ router.get('/admin/books', requireAuth, async (req, res) => {
 
 // Admin Books: Create
 router.post('/admin/books', requireAuth, async (req, res) => {
-  const { title, subjectId, author, edition, programOrClass, semester, language, status, description } = req.body;
+  const { title, subjectId, bookNumber, author, edition, programOrClass, semester, language, status, description } = req.body;
   if (!title || !title.trim() || !subjectId) {
     return res.status(400).json({ success: false, message: 'Book title and subject are required.' });
   }
@@ -539,6 +795,7 @@ router.post('/admin/books', requireAuth, async (req, res) => {
 
   const book = await Book.create({
     title: cleanTitle,
+    bookNumber: bookNumber ? bookNumber.trim() : '',
     subjectId,
     author: author ? author.trim() : (subject.name ? `${subject.name} Faculty` : 'Academic Faculty'),
     edition: edition ? edition.trim() : 'Standard Edition',
@@ -556,12 +813,13 @@ router.post('/admin/books', requireAuth, async (req, res) => {
 // Admin Books: Update
 router.put('/admin/books/:id', requireAuth, async (req, res) => {
   try {
-    const { title, subjectId, author, edition, programOrClass, semester, language, status, description } = req.body;
+    const { title, subjectId, bookNumber, author, edition, programOrClass, semester, language, status, description } = req.body;
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ success: false, message: 'Book not found' });
 
     if (title && title.trim()) book.title = title.trim();
     if (subjectId) book.subjectId = subjectId;
+    if (bookNumber !== undefined) book.bookNumber = bookNumber.trim();
     if (author !== undefined) book.author = author.trim();
     if (edition !== undefined) book.edition = edition.trim();
     if (programOrClass !== undefined) book.programOrClass = programOrClass.trim();
@@ -676,6 +934,86 @@ router.delete('/admin/questions/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Admin Examination Attempts: List with Search and Pagination
+router.get('/admin/exams', requireAuth, async (req, res) => {
+  try {
+    const { search, page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (search && search.trim()) {
+      const q = search.trim();
+      filter.$or = [
+        { studentName: { $regex: q, $options: 'i' } },
+        { studentRollNo: { $regex: q, $options: 'i' } },
+        { studentClass: { $regex: q, $options: 'i' } },
+        { title: { $regex: q, $options: 'i' } }
+      ];
+    }
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, exams] = await Promise.all([
+      ExamAttempt.countDocuments(filter),
+      ExamAttempt.find(filter)
+        .populate('subjectId', 'name code programOrClass')
+        .populate('bookId', 'title')
+        .sort({ submittedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+    ]);
+
+    res.json({
+      success: true,
+      data: exams,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum) || 1
+      }
+    });
+  } catch (err) {
+    console.error('[API /admin/exams GET Error]:', err);
+    res.status(500).json({ success: false, message: err.message || 'Error fetching examination records' });
+  }
+});
+
+// Admin Examination Attempts: Clear Single Record by ID
+router.delete('/admin/exams/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid examination record ID.' });
+    }
+    const deleted = await ExamAttempt.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Examination record not found or already deleted.' });
+    }
+    SERVER_CACHE.invalidate();
+    res.json({ success: true, message: 'Examination record deleted successfully.' });
+  } catch (err) {
+    console.error('[API /admin/exams/:id DELETE Error]:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to delete examination record' });
+  }
+});
+
+// Admin Examination Attempts: Clear All Records Completely
+router.delete('/admin/exams', requireAuth, async (req, res) => {
+  try {
+    const result = await ExamAttempt.deleteMany({});
+    SERVER_CACHE.invalidate();
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `All examination records (${result.deletedCount}) have been permanently cleared.`
+    });
+  } catch (err) {
+    console.error('[API /admin/exams DELETE ALL Error]:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to clear examination records' });
+  }
+});
+
 // Admin Imports: File Preview (JSON, CSV, DOCX)
 router.post('/admin/imports/preview', requireAuth, upload.single('file'), async (req, res) => {
   try {
@@ -749,11 +1087,23 @@ router.post('/admin/imports/json', requireAuth, async (req, res) => {
         semester: firstWithSemester ? (firstWithSemester.semester || firstWithSemester.Semester) : null
       };
     } else if (typeof parsedData === 'object' && parsedData !== null) {
-      rawQuestions = parsedData.questions || parsedData.mcqs || parsedData.data || parsedData.items || [];
+      if (Array.isArray(parsedData.weeks)) {
+        rawQuestions = parsedData.weeks.flatMap(w =>
+          (w.questions || []).map(q => ({
+            ...q,
+            week: q.week !== undefined && q.week !== null ? q.week : w.week,
+            chapter: q.chapter || (w.week ? `Week ${w.week}: ${w.title || ''}` : (w.title || '')),
+            topic: q.topic || w.title || ''
+          }))
+        );
+      } else {
+        rawQuestions = parsedData.questions || parsedData.mcqs || parsedData.data || parsedData.items || [];
+      }
       metadata = {
-        subject: parsedData.subject || parsedData.subjectName || parsedData.course || null,
+        subject: parsedData.subject || parsedData.subjectName || parsedData.course || parsedData.course_title || null,
+        code: parsedData.course_code || parsedData.code || null,
         book: parsedData.book || parsedData.bookTitle || parsedData.bookName || null,
-        programOrClass: parsedData.programOrClass || parsedData.program || null,
+        programOrClass: parsedData.level || parsedData.programOrClass || parsedData.program || null,
         semester: parsedData.semester || null
       };
     }
@@ -813,18 +1163,35 @@ router.post('/upload', requireAuth, async (req, res) => {
   let targetSubjectId = subjectId;
 
   if (!targetSubjectId && createNewSubject?.name) {
-    const slug = createNewSubject.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const createdSub = await Subject.create({
-      name: createNewSubject.name.trim(),
-      slug: `${slug}-${Date.now().toString().slice(-4)}`,
-      code: createNewSubject.code || '',
-      programOrClass: createNewSubject.programOrClass || 'General',
-      semester: createNewSubject.semester || '',
-      academicYear: createNewSubject.academicYear || '2026',
-      language: createNewSubject.language || 'en',
-      status: 'published'
+    const cleanSubName = createNewSubject.name.trim().replace(/_/g, ' ');
+    // Match existing subject by name or slug (case-insensitive and underscore-insensitive)
+    const existingSub = await Subject.findOne({
+      $or: [
+        { name: new RegExp(`^${cleanSubName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        { name: new RegExp(`^${createNewSubject.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      ]
     });
-    targetSubjectId = createdSub._id;
+
+    if (existingSub) {
+      targetSubjectId = existingSub._id;
+      if (createNewSubject.code && (!existingSub.code || existingSub.code === '-')) {
+        existingSub.code = createNewSubject.code;
+        await existingSub.save();
+      }
+    } else {
+      const slug = cleanSubName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const createdSub = await Subject.create({
+        name: cleanSubName,
+        slug: `${slug}-${Date.now().toString().slice(-4)}`,
+        code: createNewSubject.code || '',
+        programOrClass: createNewSubject.programOrClass || 'General',
+        semester: createNewSubject.semester || '',
+        academicYear: createNewSubject.academicYear || '2026',
+        language: createNewSubject.language || 'en',
+        status: 'published'
+      });
+      targetSubjectId = createdSub._id;
+    }
   }
 
   if (!targetSubjectId) {
@@ -842,18 +1209,23 @@ router.post('/upload', requireAuth, async (req, res) => {
     targetBook = await Book.findById(bookId);
   }
 
-  const cleanBookTitle = (bookTitle && typeof bookTitle === 'string') ? bookTitle.trim() : '';
+  const rawBookTitle = (bookTitle && typeof bookTitle === 'string') ? bookTitle.trim() : '';
+  const displayBookTitle = rawBookTitle.replace(/_/g, ' ');
 
-  if (!targetBook && cleanBookTitle) {
-    const escapedTitle = cleanBookTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!targetBook && rawBookTitle) {
+    const escapedRaw = rawBookTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedDisplay = displayBookTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     targetBook = await Book.findOne({
       subjectId: targetSubjectId,
-      title: new RegExp(`^${escapedTitle}$`, 'i')
+      $or: [
+        { title: new RegExp(`^${escapedRaw}$`, 'i') },
+        { title: new RegExp(`^${escapedDisplay}$`, 'i') }
+      ]
     });
 
     if (!targetBook) {
       targetBook = await Book.create({
-        title: cleanBookTitle,
+        title: rawBookTitle,
         subjectId: targetSubjectId,
         author: bookAuthor ? bookAuthor.trim() : (targetSubject.name ? `${targetSubject.name} Faculty` : 'Academic Faculty'),
         edition: bookEdition ? bookEdition.trim() : 'Standard Edition',
