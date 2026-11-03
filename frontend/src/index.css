@@ -34,100 +34,54 @@ html, body {
   display: none;
 }
 
+/* ==========================================================================
+ * OFFICIAL ACADEMIC RESULT TRANSCRIPT PRINT RULES
+ * GUARANTEED SINGLE-PAGE ARCHITECTURE (NO EXTRA SHEETS)
+ * ======================================================================== */
 @page {
   size: A4 portrait;
-  margin: 8mm 10mm;
+  margin: 6mm 8mm;
 }
 
-/* ==========================================================================
- * ISOLATED RESULT SHEET PRINT RULES
- * ======================================================================== */
 @media print {
-  html, body {
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  body.printing-result-sheet {
-    background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  body.printing-result-sheet * {
-    visibility: hidden;
-  }
-
-  body.printing-result-sheet .printable-result-sheet,
-  body.printing-result-sheet .printable-result-sheet * {
-    visibility: visible;
-  }
-
-  body.printing-result-sheet .printable-result-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 24px;
-    background: #ffffff !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  body.printing-result-sheet .print-sheet-only {
-    display: block !important;
-    visibility: visible !important;
-  }
-
-  body.printing-result-sheet .print-sheet-only.print\:flex {
-    display: flex !important;
-    visibility: visible !important;
-  }
-
-  body.printing-result-sheet .print-sheet-only * {
-    visibility: visible !important;
-  }
-
-  body.printing-result-sheet .no-print-sheet,
-  body.printing-result-sheet .no-print-sheet *,
-  body.printing-result-sheet .print\:hidden {
+  /* ALWAYS hide React #root completely so it consumes ZERO space and NEVER prints */
+  #root,
+  body > *:not(#print-sheet-root),
+  .no-print-sheet,
+  .print\:hidden {
     display: none !important;
     visibility: hidden !important;
-  }
-
-  /* Single Student Certified Transcript: Guaranteed EXACTLY 1 Page */
-  body.printing-single-result {
-    margin: 0 !important;
-    padding: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Completely collapse #root and any other elements attached to body so they occupy 0 height and create no extra sheets */
-  body.printing-single-result #root,
-  body.printing-single-result > *:not(#print-sheet-root) {
-    display: none !important;
     height: 0 !important;
     min-height: 0 !important;
     max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow: hidden !important;
   }
 
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  /* Force exact color reproduction and background preservation on all elements */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   /* Display ONLY the dedicated print portal container */
-  body.printing-single-result #print-sheet-root {
+  #print-sheet-root {
     display: block !important;
+    visibility: visible !important;
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -137,38 +91,44 @@ html, body {
     overflow: visible !important;
   }
 
-  body.printing-single-result .standard-single-card {
+  /* Single Student Certified Transcript: Guaranteed EXACTLY 1 Page */
+  .standard-single-card-wrapper {
+    width: 100% !important;
+    max-height: 280mm !important;
     page-break-before: avoid !important;
     page-break-after: avoid !important;
     page-break-inside: avoid !important;
     break-before: avoid !important;
     break-after: avoid !important;
     break-inside: avoid !important;
-    max-height: 275mm !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
-  body.printing-single-result .print-page-pair {
+  .standard-single-card {
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Multiple certificates: EXACTLY 2 cards per page */
+  .print-page-pair {
+    width: 100% !important;
+    max-height: 280mm !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
-  body.printing-single-result .print-page-pair:not(:last-child) {
+  .print-page-pair:not(:last-child) {
     page-break-after: always !important;
     break-after: page !important;
   }
 
-  body.printing-single-result .print-page-pair:last-child {
+  .print-page-pair:last-child {
     page-break-after: avoid !important;
     break-after: avoid !important;
-  }
-
-  body.printing-single-result .no-print-sheet,
-  body.printing-single-result .no-print-sheet *,
-  body.printing-single-result .print\:hidden {
-    display: none !important;
-    visibility: hidden !important;
   }
 }
 

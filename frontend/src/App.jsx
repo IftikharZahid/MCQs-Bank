@@ -1392,15 +1392,14 @@ function renderStandardExamCard(exam) {
   return (
     <div className="standard-single-card">
       {/* Certified Transcript Header */}
-      <div className="flex items-center justify-between pb-3 mb-3.5 border-b-2 border-slate-900">
-        <div className="flex items-center gap-3.5">
+      <div className="flex items-center justify-between pb-2.5 mb-3 border-b-2 border-slate-900">
+        <div className="flex items-center gap-3">
           {/* Professional Academic Emblem / Logo */}
-          <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 text-amber-400 flex items-center justify-center shadow-xs shrink-0 relative">
-            <GraduationCap className="w-7 h-7 text-amber-400 stroke-[2.2]" />
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-[9px] font-black border border-white">
-              ✓
-            </div>
-          </div>
+          <img
+            src="/favicon.svg"
+            alt="MCQs BANK"
+            className="w-12 h-12 rounded-xl object-contain border border-slate-300 shadow-2xs shrink-0"
+          />
           <div className="leading-tight">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black text-slate-950 tracking-tight leading-none uppercase">
@@ -1410,9 +1409,9 @@ function renderStandardExamCard(exam) {
                 Official Transcript
               </span>
             </div>
-            <p className="text-xs font-black uppercase tracking-wider text-slate-800 mt-1">
+            <h2 className="text-xs font-black uppercase tracking-wider text-slate-800 mt-1">
               Academic Portal
-            </p>
+            </h2>
             <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500 mt-0.5">
               Higher Education Examination Assessment Division
             </p>
@@ -1433,31 +1432,31 @@ function renderStandardExamCard(exam) {
       </div>
 
       {/* Candidate Profile & Exam Details (Enlarged & Academic Standard) */}
-      <div className="grid grid-cols-12 gap-3.5 p-4 mb-3.5 bg-slate-50 border border-slate-300 rounded-xl">
-        <div className="col-span-6 space-y-2 pr-3.5 border-r border-slate-200">
+      <div className="grid grid-cols-12 gap-3 p-3.5 mb-3 bg-slate-50 border border-slate-300 rounded-xl">
+        <div className="col-span-6 space-y-1.5 pr-3 border-r border-slate-200">
           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
             Candidate Profile
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-950 tracking-tight leading-snug uppercase">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight leading-snug uppercase">
               {exam.studentName}
             </h2>
             <div className="mt-2 space-y-1.5 text-xs">
               <div className="flex items-baseline gap-2">
                 <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Roll Number:</span>
-                <span className="font-mono font-black text-slate-900 text-sm tracking-wide">
+                <span className="font-mono font-black text-slate-950 text-sm sm:text-base tracking-wide">
                   {exam.studentRollNo || 'N/A'}
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Class / Semester:</span>
-                <span className="font-black text-slate-900 text-sm">
+                <span className="font-black text-slate-950 text-sm sm:text-base">
                   {exam.studentClass || 'N/A'}
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Institution:</span>
-                <span className="font-bold text-slate-800 text-xs">
+                <span className="font-bold text-slate-800 text-xs sm:text-sm">
                   {exam.studentInstitution || 'Central Examination Center'}
                 </span>
               </div>
@@ -1465,24 +1464,24 @@ function renderStandardExamCard(exam) {
           </div>
         </div>
 
-        <div className="col-span-6 space-y-2 pl-1">
+        <div className="col-span-6 space-y-1.5 pl-1">
           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
             Examination Particulars
           </div>
           <div>
-            <h3 className="text-base font-black text-slate-950 tracking-tight leading-snug uppercase">
+            <h3 className="text-base sm:text-lg font-black text-slate-950 tracking-tight leading-snug uppercase">
               {exam.subjectId?.name || exam.title}
             </h3>
             <div className="mt-2 space-y-1.5 text-xs">
               <div className="flex items-baseline gap-2">
                 <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Assessment:</span>
-                <span className="font-bold text-slate-900 text-xs truncate">
+                <span className="font-bold text-slate-900 text-xs sm:text-sm truncate">
                   {exam.title}
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="font-bold text-slate-500 uppercase text-[10px] w-28 shrink-0">Syllabus Scope:</span>
-                <span className="font-bold text-slate-900 text-xs">
+                <span className="font-bold text-slate-900 text-xs sm:text-sm">
                   {exam.week ? `Week ${exam.week} Targeted Module` : 'Comprehensive Syllabus Examination'}
                 </span>
               </div>
@@ -1504,22 +1503,22 @@ function renderStandardExamCard(exam) {
       </div>
 
       {/* Performance Summary 4 Cards */}
-      <div className="grid grid-cols-4 gap-2.5 mb-3.5">
-        <div className="border border-slate-300 rounded-xl p-2.5 text-center bg-white shadow-2xs">
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <div className="border border-slate-300 rounded-xl p-2 text-center bg-white shadow-2xs">
           <p className="text-[9px] uppercase font-extrabold text-slate-500 tracking-wider">Marks Obtained</p>
           <p className="text-xl font-black text-slate-950 mt-0.5">
             {correct} <span className="text-xs font-semibold text-slate-500">/ {totalQ}</span>
           </p>
         </div>
-        <div className="border border-slate-300 rounded-xl p-2.5 text-center bg-white shadow-2xs">
+        <div className="border border-slate-300 rounded-xl p-2 text-center bg-white shadow-2xs">
           <p className="text-[9px] uppercase font-extrabold text-slate-500 tracking-wider">Percentage</p>
           <p className="text-xl font-black text-slate-950 mt-0.5">{percentage}%</p>
         </div>
-        <div className="border border-slate-300 rounded-xl p-2.5 text-center bg-white shadow-2xs">
+        <div className="border border-slate-300 rounded-xl p-2 text-center bg-white shadow-2xs">
           <p className="text-[9px] uppercase font-extrabold text-slate-500 tracking-wider">Letter Grade</p>
           <p className="text-xl font-black text-slate-950 mt-0.5">{grade}</p>
         </div>
-        <div className={`border rounded-xl p-2.5 text-center shadow-2xs flex flex-col justify-center ${
+        <div className={`border rounded-xl p-2 text-center shadow-2xs flex flex-col justify-center ${
           passed ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-red-50 border-red-300 text-red-900'
         }`}>
           <p className="text-[9px] uppercase font-extrabold tracking-wider">Examination Result</p>
@@ -1530,43 +1529,43 @@ function renderStandardExamCard(exam) {
       </div>
 
       {/* Assessment Evaluation Breakdown Table */}
-      <div className="border border-slate-300 rounded-xl overflow-hidden mb-4">
-        <div className="bg-slate-100 px-3.5 py-1.5 border-b border-slate-300 font-extrabold text-[11px] text-slate-800 uppercase tracking-wider">
+      <div className="border border-slate-300 rounded-xl overflow-hidden mb-3">
+        <div className="bg-slate-100 px-3 py-1 border-b border-slate-300 font-extrabold text-[10px] text-slate-800 uppercase tracking-wider">
           Assessment Evaluation Breakdown
         </div>
         <table className="w-full text-xs">
           <tbody className="divide-y divide-slate-200">
             <tr>
-              <td className="py-2 px-3.5 font-semibold text-slate-700">Total Curriculum Questions Evaluated</td>
-              <td className="py-2 px-3.5 font-bold text-slate-950 text-right">{totalQ} Questions</td>
+              <td className="py-1.5 px-3 font-semibold text-slate-700">Total Curriculum Questions Evaluated</td>
+              <td className="py-1.5 px-3 font-bold text-slate-950 text-right">{totalQ} Questions</td>
             </tr>
             <tr>
-              <td className="py-2 px-3.5 font-semibold text-slate-700">Verified Correct Answers</td>
-              <td className="py-2 px-3.5 font-bold text-emerald-700 text-right">{correct} Correct</td>
+              <td className="py-1.5 px-3 font-semibold text-slate-700">Verified Correct Answers</td>
+              <td className="py-1.5 px-3 font-bold text-emerald-700 text-right">{correct} Correct</td>
             </tr>
             <tr>
-              <td className="py-2 px-3.5 font-semibold text-slate-700">Incorrect / Unanswered Responses</td>
-              <td className="py-2 px-3.5 font-bold text-red-600 text-right">{incorrect} Incorrect</td>
+              <td className="py-1.5 px-3 font-semibold text-slate-700">Incorrect / Unanswered Responses</td>
+              <td className="py-1.5 px-3 font-bold text-red-600 text-right">{incorrect} Incorrect</td>
             </tr>
             <tr>
-              <td className="py-2 px-3.5 font-semibold text-slate-700">Passing Qualifying Benchmark</td>
-              <td className="py-2 px-3.5 font-bold text-slate-800 text-right">{passingBenchmark}% Score Required</td>
+              <td className="py-1.5 px-3 font-semibold text-slate-700">Passing Qualifying Benchmark</td>
+              <td className="py-1.5 px-3 font-bold text-slate-800 text-right">{passingBenchmark}% Score Required</td>
             </tr>
             <tr>
-              <td className="py-2 px-3.5 font-semibold text-slate-700">Candidate Accuracy Rate</td>
-              <td className="py-2 px-3.5 font-bold text-slate-950 text-right">{accuracy}%</td>
+              <td className="py-1.5 px-3 font-semibold text-slate-700">Candidate Accuracy Rate</td>
+              <td className="py-1.5 px-3 font-bold text-slate-950 text-right">{accuracy}%</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       {/* Official Endorsement & Verification Footer */}
-      <div className="border-t-2 border-slate-900 pt-3.5 mt-4">
+      <div className="border-t-2 border-slate-900 pt-3 mt-3">
         <div className="flex justify-between items-end text-xs text-slate-600">
           <div>
             <p className="font-extrabold text-slate-900 uppercase tracking-widest text-[10px]">System Validation Seal</p>
             <p className="text-[10px] text-slate-500 mt-0.5">Automated Central Evaluation Engine • Digitally Certified</p>
-            <div className="mt-1.5 inline-block px-2.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-[9px] text-slate-700">
+            <div className="mt-1 inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-[9px] text-slate-700">
               HASH: {exam._id}
             </div>
           </div>
@@ -1598,11 +1597,13 @@ function renderCompactExamCard(exam, index, totalCount) {
   return (
     <div className="border border-slate-300 rounded-xl p-3 bg-white shadow-2xs">
       {/* Header */}
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-900">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 text-amber-400 flex items-center justify-center shadow-xs shrink-0">
-            <GraduationCap className="w-4 h-4 text-amber-400 stroke-[2.2]" />
-          </div>
+      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-900">
+        <div className="flex items-center gap-2">
+          <img
+            src="/favicon.svg"
+            alt="MCQs BANK"
+            className="w-8 h-8 rounded-lg object-contain border border-slate-300 shadow-2xs shrink-0"
+          />
           <div className="leading-tight">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black text-slate-950 tracking-tight leading-none uppercase">
@@ -1612,9 +1613,9 @@ function renderCompactExamCard(exam, index, totalCount) {
                 Official Transcript
               </span>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-800 mt-0.5">
+            <h2 className="text-[10px] font-black uppercase tracking-wider text-slate-800 mt-0.5">
               Academic Portal
-            </p>
+            </h2>
           </div>
         </div>
         <div className="text-right leading-tight">
@@ -1762,10 +1763,10 @@ function PrintableExamSheet({ exam, exams }) {
   const portalTarget = document.getElementById('print-sheet-root');
   if (!portalTarget) return null;
 
-  // Single certificate: Standard sized full A4 sheet
+  // Single certificate: Standard sized full A4 sheet (Guaranteed 1 Page)
   if (examList.length === 1) {
     return createPortal(
-      <div className="bg-white text-slate-900 font-sans p-6 leading-normal box-border">
+      <div className="standard-single-card-wrapper bg-white text-slate-900 font-sans p-4 leading-normal box-border">
         {renderStandardExamCard(examList[0])}
       </div>,
       portalTarget
@@ -1779,7 +1780,7 @@ function PrintableExamSheet({ exam, exams }) {
   }
 
   return createPortal(
-    <div className="bg-white text-slate-900 font-sans p-4 leading-normal box-border">
+    <div className="bg-white text-slate-900 font-sans p-3 leading-normal box-border">
       {pairs.map((pair, pairIdx) => (
         <div key={pairIdx} className="print-page-pair">
           {/* Card 1 */}
@@ -1787,7 +1788,7 @@ function PrintableExamSheet({ exam, exams }) {
 
           {/* Academic Perforation Divider */}
           {pair[1] && (
-            <div className="my-2.5 flex items-center justify-center gap-2 text-slate-400 no-break">
+            <div className="my-2 flex items-center justify-center gap-2 text-slate-400 no-break">
               <div className="flex-1 border-t-2 border-dashed border-slate-300"></div>
               <div className="flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-100 border border-slate-300 text-[8px] font-mono font-bold uppercase tracking-wider text-slate-600 shrink-0">
                 <span>✂</span>
@@ -1939,8 +1940,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-      setTimeout(cleanup, 2500);
-    }, 50);
+    }, 60);
   };
 
   const totalBankQuestions = status.stats?.questions || subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) || 721;
@@ -2077,94 +2077,94 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
         </div>
       </section>
 
-      {/* 2. SUMMARY STATS CARD (Accurate Real-Time Metrics for Both Books & Subjects) */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-3 sm:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 items-stretch text-center">
+      {/* 2. SUMMARY STATS CARD (Accurate Real-Time Metrics for Both Books & Subjects - Mobile Compact) */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-sm p-2 sm:p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2.5 items-stretch text-center">
           {/* Metric 1: Reference Books */}
-          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1 shadow-2xs">
-              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          <div className="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1 shadow-2xs">
+              <BookOpen className="w-3 h-3 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-xs sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
               {String(status.stats?.books ?? books.length).padStart(2, '0')}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
+            <span className="text-[9px] sm:text-[11px] font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Syllabus Books
             </span>
           </div>
 
-          {/* Metric 2: Academic Subjects */}
-          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 shadow-2xs">
-              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+          {/* Metric 2: Academic Subjects / Active Syllabus */}
+          <div className="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 shadow-2xs">
+              <Layers className="w-3 h-3 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-xs sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
               {String(status.stats?.subjects ?? subjects.length).padStart(2, '0')}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
-              Active Subjects
+            <span className="text-[9px] sm:text-[11px] font-semibold text-slate-500 mt-0.5 leading-tight text-center">
+              Active Syllabus
             </span>
           </div>
 
           {/* Metric 3: Total MCQs */}
-          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 shadow-2xs">
+          <div className="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1 shadow-2xs">
               <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-xs sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
               {status.stats?.questions || totalBankQuestions}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
+            <span className="text-[9px] sm:text-[11px] font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Total MCQs
             </span>
           </div>
 
           {/* Metric 4: Solved MCQs by Candidate */}
-          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 shadow-2xs">
+          <div className="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-50 transition">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 shadow-2xs">
               <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-xs sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
               {overallStats.totalSolved}
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
+            <span className="text-[9px] sm:text-[11px] font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Solved MCQs
             </span>
           </div>
 
           {/* Metric 5: Bank Solved % */}
-          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl bg-amber-50/60 sm:bg-slate-50/80 border border-amber-200/60 sm:border-slate-100 hover:bg-slate-50 transition col-span-2 sm:col-span-2 lg:col-span-1">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-amber-100 sm:bg-amber-50 text-amber-600 flex items-center justify-center mb-1 shadow-2xs">
+          <div className="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl bg-amber-50/60 sm:bg-slate-50/80 border border-amber-200/60 sm:border-slate-100 hover:bg-slate-50 transition col-span-2 sm:col-span-1">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-amber-100 sm:bg-amber-50 text-amber-600 flex items-center justify-center mb-1 shadow-2xs">
               <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
             </div>
-            <span className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <span className="text-xs sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
               {overallStats.overallPercentage}%
             </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 leading-tight text-center">
+            <span className="text-[9px] sm:text-[11px] font-semibold text-slate-500 mt-0.5 leading-tight text-center">
               Bank Solved
             </span>
           </div>
         </div>
       </div>
 
-      {/* 2.5 CANDIDATE ACADEMIC PROGRESS & MASTERY DASHBOARD */}
-      <section className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-navy to-blue-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
-              {studentUser?.name ? studentUser.name.charAt(0).toUpperCase() : <GraduationCap className="w-5 h-5 text-amber-400" />}
+      {/* 2.5 CANDIDATE ACADEMIC PROGRESS & MASTERY DASHBOARD (Compact for Mobile) */}
+      <section className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm space-y-2.5 sm:space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-brand-navy to-blue-600 text-white flex items-center justify-center font-black text-xs sm:text-sm shadow-sm shrink-0">
+              {studentUser?.name ? studentUser.name.charAt(0).toUpperCase() : <GraduationCap className="w-4 h-4 text-amber-400" />}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="text-xs sm:text-sm md:text-base font-bold text-slate-900 leading-tight">
                   {studentUser ? studentUser.name : 'Candidate Preparation Workspace'}
                 </h2>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {studentUser ? 'Candidate Logged In' : 'Active Browser Session'}
                 </span>
               </div>
-              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
                 {studentUser
                   ? `${studentUser.className || 'Academic Degree'}${studentUser.rollNo ? ` • Roll: ${studentUser.rollNo}` : ''}${studentUser.institution ? ` • ${studentUser.institution}` : ''}`
                   : 'Track your solved questions, accuracy rate, and syllabus completion in real-time'}
@@ -2172,12 +2172,12 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             {studentUser ? (
               <button
                 type="button"
                 onClick={onOpenStudentLogin}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition flex items-center gap-1.5"
+                className="w-full sm:w-auto px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer min-h-[34px] sm:min-h-0"
               >
                 <UserCheck className="w-3.5 h-3.5 text-blue-600" />
                 <span>Candidate Profile</span>
@@ -2186,9 +2186,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
               <button
                 type="button"
                 onClick={onOpenStudentLogin}
-                className="px-3.5 py-1.5 rounded-xl bg-brand-navy text-amber-400 hover:bg-slate-800 text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                className="w-full sm:w-auto px-3 sm:px-3.5 py-1.5 rounded-xl bg-brand-navy text-amber-400 hover:bg-slate-800 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer min-h-[34px] sm:min-h-0 active:scale-95"
               >
-                <GraduationCap className="w-3.5 h-3.5" />
+                <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
                 <span>Candidate Login</span>
               </button>
             )}
@@ -2196,17 +2196,17 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
         </div>
 
         {/* Overall Progress Bar Across All Questions in Bank */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-700 flex items-center gap-1.5">
-              <span>Overall Question Bank Mastery</span>
-              <span className="text-slate-400 font-normal">({overallStats.totalSolved} of {totalBankQuestions} MCQs Solved)</span>
+        <div className="space-y-1 sm:space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs">
+            <span className="font-bold text-slate-700 flex items-center gap-1 truncate">
+              <span>Overall Bank Mastery</span>
+              <span className="text-slate-400 font-normal">({overallStats.totalSolved}/{totalBankQuestions})</span>
             </span>
-            <span className="font-black text-sm text-blue-600">
+            <span className="font-black text-xs sm:text-sm text-blue-600 shrink-0">
               {overallStats.overallPercentage}%
             </span>
           </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/60 relative">
+          <div className="h-2 sm:h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/60 relative">
             <div
               className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-amber-400 rounded-full transition-all duration-700 shadow-sm"
               style={{ width: `${Math.max(overallStats.overallPercentage, overallStats.totalSolved > 0 ? 3 : 0)}%` }}
@@ -2215,22 +2215,22 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
         </div>
 
         {/* 4 Performance Chips */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
-          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Solved MCQs</span>
-            <span className="text-xs sm:text-sm font-black text-slate-900">{overallStats.totalSolved} Questions</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 pt-0.5 text-center">
+          <div className="bg-slate-50 rounded-xl p-1.5 sm:p-2 border border-slate-100">
+            <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Solved MCQs</span>
+            <span className="text-[11px] sm:text-xs md:text-sm font-black text-slate-900">{overallStats.totalSolved} Questions</span>
           </div>
-          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Correct Answers</span>
-            <span className="text-xs sm:text-sm font-black text-emerald-600">{overallStats.totalCorrect} Correct</span>
+          <div className="bg-slate-50 rounded-xl p-1.5 sm:p-2 border border-slate-100">
+            <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Correct Answers</span>
+            <span className="text-[11px] sm:text-xs md:text-sm font-black text-emerald-600">{overallStats.totalCorrect} Correct</span>
           </div>
-          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Accuracy Rate</span>
-            <span className="text-xs sm:text-sm font-black text-blue-600">{overallStats.accuracyRate}%</span>
+          <div className="bg-slate-50 rounded-xl p-1.5 sm:p-2 border border-slate-100">
+            <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Accuracy Rate</span>
+            <span className="text-[11px] sm:text-xs md:text-sm font-black text-blue-600">{overallStats.accuracyRate}%</span>
           </div>
-          <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Tests & Exams</span>
-            <span className="text-xs sm:text-sm font-black text-purple-600">{overallStats.examsTaken} Completed</span>
+          <div className="bg-slate-50 rounded-xl p-1.5 sm:p-2 border border-slate-100">
+            <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Tests & Exams</span>
+            <span className="text-[11px] sm:text-xs md:text-sm font-black text-purple-600">{overallStats.examsTaken} Completed</span>
           </div>
         </div>
       </section>
@@ -2646,7 +2646,7 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
 
       {/* 5. RECENT EXAM RESULTS */}
       {recentExams.length > 0 && (
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm mt-6 print:border-none print:shadow-none print:p-0">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm mt-6 no-print-sheet print:hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 no-print-sheet">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
@@ -3168,11 +3168,22 @@ function CatalogPage() {
  * 3. INTERACTIVE PRACTICE MODE
  * ======================================================================== */
 function PracticePage() {
+  const [searchParams] = useSearchParams();
+  const subjectId = searchParams.get('subjectId');
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  const subjects = useSelector(selectAllSubjects);
+  const allBooks = useSelector(selectAllBooks);
+  const catalogLoading = useSelector(selectCatalogLoading);
+
+  const [subjectSearch, setSubjectSearch] = useState('');
+  const [selectedProgram, setSelectedProgram] = useState('all');
+
   const cacheKey = location.search || 'default';
-  const [questions, setQuestions] = useState(() => API_CACHE.questions[cacheKey] || []);
-  const [loading, setLoading] = useState(() => !API_CACHE.questions[cacheKey]);
+  const [questions, setQuestions] = useState(() => (subjectId ? (API_CACHE.questions[cacheKey] || []) : []));
+  const [loading, setLoading] = useState(() => Boolean(subjectId && !API_CACHE.questions[cacheKey]));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [skippedQuestions, setSkippedQuestions] = useState(new Set());
@@ -3182,6 +3193,40 @@ function PracticePage() {
     try { return JSON.parse(localStorage.getItem('qb_bookmarks') || '[]'); } catch { return []; }
   });
   const navContainerRef = useRef(null);
+
+  // Sync catalog subjects if visiting directly
+  useEffect(() => {
+    if (subjects.length === 0) {
+      dispatch(fetchCatalogData({ force: false }));
+    }
+  }, [dispatch, subjects.length]);
+
+  const availablePrograms = useMemo(() => {
+    const set = new Set();
+    subjects.forEach(s => {
+      if (s.programOrClass) set.add(s.programOrClass);
+    });
+    return ['all', ...Array.from(set)];
+  }, [subjects]);
+
+  const filteredSubjects = useMemo(() => {
+    const q = subjectSearch.trim().toLowerCase();
+    return subjects.filter(s => {
+      if (selectedProgram !== 'all' && (s.programOrClass || 'BSCS').toLowerCase() !== selectedProgram.toLowerCase()) {
+        return false;
+      }
+      if (!q) return true;
+      const matchName = s.name?.toLowerCase().includes(q);
+      const matchCode = s.code?.toLowerCase().includes(q);
+      const matchProg = s.programOrClass?.toLowerCase().includes(q);
+      return matchName || matchCode || matchProg;
+    });
+  }, [subjects, subjectSearch, selectedProgram]);
+
+  const currentSubject = useMemo(() => {
+    if (!subjectId) return null;
+    return subjects.find(s => String(s._id) === String(subjectId)) || null;
+  }, [subjects, subjectId]);
 
   useEffect(() => {
     if (navContainerRef.current) {
@@ -3193,6 +3238,12 @@ function PracticePage() {
   }, [currentIndex]);
 
   useEffect(() => {
+    if (!subjectId) {
+      setLoading(false);
+      setQuestions([]);
+      return;
+    }
+
     const key = location.search || 'default';
     if (!API_CACHE.questions[key]) {
       setLoading(true);
@@ -3221,7 +3272,7 @@ function PracticePage() {
         if (list.length > 0) {
           const firstQ = list[0];
           const subId = (typeof firstQ.subjectId === 'object' ? firstQ.subjectId?._id : firstQ.subjectId) || params.get('subjectId');
-          const subName = typeof firstQ.subjectId === 'object' ? firstQ.subjectId?.name : null;
+          const subName = typeof firstQ.subjectId === 'object' ? firstQ.subjectId?.name : (currentSubject?.name || null);
           if (subId) {
             recordRecentActivitySession({
               type: 'practice',
@@ -3235,7 +3286,7 @@ function PracticePage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [location.search]);
+  }, [location.search, subjectId, currentSubject?.name]);
 
   const toggleBookmark = (qId) => {
     const next = bookmarks.includes(qId) ? bookmarks.filter(id => id !== qId) : [...bookmarks, qId];
@@ -3255,7 +3306,7 @@ function PracticePage() {
 
     const isCorrect = optIdx === q.correctAnswer;
     const subId = (typeof q.subjectId === 'object' ? q.subjectId?._id : q.subjectId) || new URLSearchParams(location.search).get('subjectId');
-    const subName = typeof q.subjectId === 'object' ? q.subjectId?.name : null;
+    const subName = typeof q.subjectId === 'object' ? q.subjectId?.name : (currentSubject?.name || null);
 
     recordQuestionProgress({
       questionId: q._id,
@@ -3293,6 +3344,173 @@ function PracticePage() {
     }
   };
 
+  // If no subjectId is provided in URL, show the Subject Selection Screen
+  if (!subjectId) {
+    if (catalogLoading && subjects.length === 0) {
+      return (
+        <AcademicLoader
+          title="Loading Course Curriculum"
+          subtitle="Retrieving accredited academic subjects and practice modules..."
+        />
+      );
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 animate-fadeIn">
+        {/* Header Hero Card */}
+        <div className="bg-gradient-to-r from-[#0B1536] via-[#0E1B40] to-[#14265A] text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-md border border-slate-800/80 relative overflow-hidden">
+          <div className="relative z-10 space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white/10 text-slate-200 border border-white/10">
+              <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span>Interactive Practice Mode</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight">
+              Select a Subject to Practice
+            </h1>
+            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-xl">
+              Choose an accredited course syllabus to begin chapter-wise testing with instant answer explanations, progress tracking, and bookmarking.
+            </p>
+          </div>
+        </div>
+
+        {/* Search & Program Filter Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={subjectSearch}
+              onChange={e => setSubjectSearch(e.target.value)}
+              placeholder="Search courses by title, book, or code..."
+              className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy bg-slate-50/60"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            {availablePrograms.map(prog => (
+              <button
+                key={prog}
+                type="button"
+                onClick={() => setSelectedProgram(prog)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
+                  selectedProgram === prog
+                    ? 'bg-brand-navy text-amber-400 shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {prog === 'all' ? 'All Programs' : prog}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Subjects Grid */}
+        {filteredSubjects.length === 0 ? (
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-8 text-center space-y-3">
+            <BookOpen className="w-10 h-10 text-slate-300 mx-auto" />
+            <p className="text-sm font-bold text-slate-700">No matching subjects found</p>
+            <p className="text-xs text-slate-400">Try adjusting your search query or program filter</p>
+            <button
+              type="button"
+              onClick={() => { setSubjectSearch(''); setSelectedProgram('all'); }}
+              className="px-4 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+            {filteredSubjects.map(sub => {
+              const theme = getSubjectTheme(sub.name);
+              const IconComponent = theme.icon || BookOpen;
+              const subStats = getSubjectSolvedStats(sub._id, sub.questionCount || 0);
+              const matchingBooks = allBooks.filter(b => {
+                const bSubId = typeof b.subjectId === 'object' ? b.subjectId?._id : b.subjectId;
+                return String(bSubId) === String(sub._id);
+              });
+              const primaryBook = matchingBooks[0];
+
+              return (
+                <div
+                  key={sub._id}
+                  onClick={() => navigate(`/practice?subjectId=${sub._id}`)}
+                  className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-slate-300 transition group flex flex-col justify-between cursor-pointer space-y-3"
+                >
+                  <div>
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-12 h-12 rounded-2xl ${theme.bg} text-white flex items-center justify-center shadow-xs shrink-0 group-hover:scale-105 transition transform`}>
+                        <IconComponent className="w-6 h-6 stroke-[2.2]" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
+                            {sub.name}
+                          </h3>
+                          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition shrink-0" />
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 mt-1">
+                          <span className="font-semibold text-slate-700">{sub.questionCount || 0} MCQs</span>
+                          <span>•</span>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold">
+                            {sub.programOrClass || 'BSCS'}{sub.code ? ` • ${sub.code}` : ''}
+                          </span>
+                        </div>
+
+                        {primaryBook && (
+                          <p className="text-[11px] text-slate-400 mt-1 truncate">
+                            📖 {primaryBook.title}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="font-semibold text-slate-500">
+                          {subStats.solvedCount > 0 ? (
+                            <span className="text-slate-800 font-bold">
+                              {subStats.solvedCount} of {sub.questionCount || 0} Solved
+                            </span>
+                          ) : (
+                            <span>Syllabus Progress</span>
+                          )}
+                        </span>
+                        <span className={`font-black ${subStats.percentage > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                          {subStats.percentage}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${theme.progressColor} rounded-full transition-all duration-500`}
+                          style={{ width: `${subStats.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/practice?subjectId=${sub._id}`);
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl bg-brand-navy hover:bg-slate-800 text-amber-400 text-xs font-bold transition shadow-2xs flex items-center justify-center gap-2 mt-auto cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Start Practice Session →</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <AcademicLoader
@@ -3310,14 +3528,14 @@ function PracticePage() {
         </div>
         <h3 className="text-base font-bold text-slate-800">No Questions Found</h3>
         <p className="text-xs text-slate-500 mt-1 mb-5 leading-relaxed">
-          There are no published questions matching this filter criteria yet. Select another subject or module.
+          {currentSubject ? `There are no published questions in "${currentSubject.name}" yet.` : 'There are no published questions matching this filter criteria yet.'} Select another subject.
         </p>
         <button
-          onClick={() => navigate('/catalog')}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm"
+          onClick={() => navigate('/practice')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold transition shadow-sm cursor-pointer"
         >
-          <span>Explore All Question Banks</span>
-          <ArrowRight className="w-3.5 h-3.5" />
+          <ChevronLeft className="w-3.5 h-3.5" />
+          <span>Choose Another Subject</span>
         </button>
       </div>
     );
@@ -3337,9 +3555,27 @@ function PracticePage() {
       <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 sm:p-3 shadow-xs">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate('/practice')}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer shrink-0"
+              title="Select another subject"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Change Subject</span>
+              <span className="sm:hidden">Change</span>
+            </button>
+
             <span className="px-2 py-0.5 rounded-md bg-brand-navy text-amber-400 font-black text-[10px] uppercase tracking-wider shrink-0">
               Practice
             </span>
+
+            {currentSubject && (
+              <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 font-bold text-[11px] border border-blue-200/80 truncate max-w-[200px]" title={currentSubject.name}>
+                {currentSubject.name}
+              </span>
+            )}
+
             <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold truncate">
               <span>Q {currentIndex + 1}<span className="text-slate-400 font-normal">/{questions.length}</span></span>
               <span className="text-slate-300">•</span>
@@ -3793,8 +4029,7 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-      setTimeout(cleanup, 2500);
-    }, 50);
+    }, 60);
   };
 
   if (transcript) {
@@ -3836,8 +4071,8 @@ function ExamPage({ studentUser, onOpenStudentLogin, onSaveStudent }) {
           </div>
         </div>
 
-        {/* Certificate Card */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm print:border-black print:rounded-none print:shadow-none print:p-6">
+        {/* On-Screen Result View (Hidden on print; PrintableExamSheet below portals official transcript) */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm no-print-sheet print:hidden">
           {/* Institution & Exam Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start gap-3 border-b-2 border-brand-navy pb-3 mb-4">
             <div className="flex items-start gap-2.5">
@@ -4758,8 +4993,7 @@ function AdminPanel({ adminUser, setAdminUser }) {
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-      setTimeout(cleanup, 2500);
-    }, 50);
+    }, 60);
   };
 
   // Refresh all admin data
@@ -5422,20 +5656,6 @@ function AdminPanel({ adminUser, setAdminUser }) {
               <div className="flex-1 leading-relaxed">{authError}</div>
             </div>
           )}
-
-          <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-slate-600 flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-slate-800 text-[11px]">Super Administrator Credentials:</p>
-              <p className="font-mono text-[10px] sm:text-[11px] text-blue-700">admin@mqsbank.com</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setEmail('admin@mqsbank.com'); setPassword('Admin@MCQsBank2026!'); setAuthError(''); }}
-              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-medium text-[11px] transition shadow-2xs cursor-pointer"
-            >
-              Auto-Fill
-            </button>
-          </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -8369,6 +8589,22 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
+
+  // Global print listener to ensure single-result print class is active whenever printing
+  useEffect(() => {
+    const onBeforePrint = () => {
+      document.body.classList.add('printing-single-result');
+    };
+    const onAfterPrint = () => {
+      document.body.classList.remove('printing-single-result');
+    };
+    window.addEventListener('beforeprint', onBeforePrint);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
     };
   }, []);
 
