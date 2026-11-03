@@ -189,8 +189,14 @@ router.get('/questions/weeks', async (req, res) => {
 router.get('/questions', async (req, res) => {
   const { subjectId, bookId, week, chapter, difficulty, language, search, page = 1, limit = 50 } = req.query;
   const filter = { status: 'published' };
-  if (subjectId) filter.subjectId = subjectId;
-  if (bookId) filter.bookId = bookId;
+  const mongoose = (await import('mongoose')).default;
+
+  if (subjectId) {
+    filter.subjectId = mongoose.Types.ObjectId.isValid(subjectId) ? new mongoose.Types.ObjectId(subjectId) : subjectId;
+  }
+  if (bookId) {
+    filter.bookId = mongoose.Types.ObjectId.isValid(bookId) ? new mongoose.Types.ObjectId(bookId) : bookId;
+  }
   if (chapter) filter.chapter = chapter;
   if (week && week !== 'all') {
     const numOnly = String(week).replace(/\D/g, '');
@@ -209,12 +215,15 @@ router.get('/questions', async (req, res) => {
   if (language) filter.language = language;
   if (search) filter.question = { $regex: search, $options: 'i' };
 
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(Math.max(1, Number(limit) || 50), 2000);
+
   const [questions, total] = await Promise.all([
     Question.find(filter)
       .populate('subjectId', 'name slug')
       .populate('bookId', 'title')
-      .skip((Number(page) - 1) * Number(limit))
-      .limit(Number(limit))
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
       .lean(),
     Question.countDocuments(filter)
   ]);
@@ -222,7 +231,7 @@ router.get('/questions', async (req, res) => {
   res.json({
     success: true,
     questions,
-    pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) }
+    pagination: { total, page: pageNum, pages: Math.ceil(total / limitNum) }
   });
 });
 
