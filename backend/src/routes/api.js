@@ -1297,10 +1297,14 @@ router.post('/upload', requireAuth, async (req, res) => {
     }
   }
 
-  // 2. Insert questions & link to targetBook
+  // 2. Insert questions & link to targetBook — batched for Vercel timeout safety
   let insertedCount = 0;
   let skippedDuplicates = 0;
   let linkedExistingCount = 0;
+
+  // Build all docs first, computing fingerprints
+  const docsToInsert = [];
+  const fingerprintMap = {}; // fingerprint -> index in docsToInsert
 
   for (const rawQ of questions) {
     const norm = normalizeQuestionRecord(rawQ, 0, { randomize: Boolean(randomizeOptions) });
@@ -1313,32 +1317,56 @@ router.post('/upload', requireAuth, async (req, res) => {
       .update(`${targetSubjectId.toString()}::${normalizedText}::${normalizedOpts}`)
       .digest('hex');
 
+    docsToInsert.push({
+      ...norm.data,
+      subjectId: targetSubjectId,
+      bookId: targetBook ? targetBook._id : undefined,
+      status: publishImmediately ? 'published' : 'draft',
+      fingerprint,
+      normalizedQuestion: normalizedText
+    });
+    fingerprintMap[fingerprint] = docsToInsert.length - 1;
+  }
+
+  // Batch insert in chunks of 100 to avoid Vercel serverless timeouts
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < docsToInsert.length; i += BATCH_SIZE) {
+    const batch = docsToInsert.slice(i, i + BATCH_SIZE);
     try {
-      await Question.create({
-        ...norm.data,
-        subjectId: targetSubjectId,
-        bookId: targetBook ? targetBook._id : undefined,
-        status: publishImmediately ? 'published' : 'draft',
-        fingerprint,
-        normalizedQuestion: normalizedText
-      });
-      insertedCount++;
-    } catch (err) {
-      if (err.code === 11000) {
-        skippedDuplicates++;
-        // If question already existed in this subject, link its bookId to targetBook
-        if (targetBook) {
-          const updateRes = await Question.updateOne(
-            { fingerprint },
+      const result = await Question.insertMany(batch, { ordered: false });
+      insertedCount += result.length;
+    } catch (bulkErr) {
+      // Handle partial success — insertMany with ordered:false throws but still inserts non-duplicate docs
+      if (bulkErr.writeErrors || bulkErr.insertedDocs) {
+        const inserted = bulkErr.insertedDocs ? bulkErr.insertedDocs.length :
+          (batch.length - (bulkErr.writeErrors ? bulkErr.writeErrors.length : 0));
+        insertedCount += Math.max(0, inserted);
+      }
+      // Collect duplicates and link them to targetBook
+      const dupes = (bulkErr.writeErrors || []).filter(e => e.code === 11000);
+      skippedDuplicates += dupes.length;
+      if (targetBook && dupes.length > 0) {
+        const dupeFingerprints = dupes
+          .map(e => e.getOperation?.()?.fingerprint || e.err?.op?.fingerprint)
+          .filter(Boolean);
+        if (dupeFingerprints.length > 0) {
+          const updateRes = await Question.updateMany(
+            { fingerprint: { $in: dupeFingerprints } },
             { $set: { bookId: targetBook._id, status: publishImmediately ? 'published' : 'draft' } }
           );
-          if (updateRes.modifiedCount > 0) {
-            linkedExistingCount++;
-          }
+          linkedExistingCount += updateRes.modifiedCount || 0;
         }
       }
     }
   }
+
+  // Update persistent questionCount on the book and subject docs
+  if (targetBook) {
+    const bookQCount = await Question.countDocuments({ bookId: targetBook._id, status: 'published' });
+    await Book.findByIdAndUpdate(targetBook._id, { $set: { questionCount: bookQCount } });
+  }
+  const subQCount = await Question.countDocuments({ subjectId: targetSubjectId, status: 'published' });
+  await Subject.findByIdAndUpdate(targetSubjectId, { $set: { questionCount: subQCount } });
 
   SERVER_CACHE.invalidate();
 

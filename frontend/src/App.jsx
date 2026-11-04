@@ -1817,9 +1817,9 @@ const VERIFIED_PORTAL_STATS = {
   status: 'online',
   database: 'connected',
   stats: {
-    subjects: 8,
-    books: 9,
-    questions: 2929,
+    subjects: 9,
+    books: 10,
+    questions: 3441,
     exams: 12,
     draftQuestions: 0
   }
@@ -2042,9 +2042,9 @@ function HomePage({ studentUser, onOpenStudentLogin, onOpenAppModal }) {
     }
   }, [recentExams, studentUser]);
 
-  const booksCount = Number(status.stats?.books) || (books.length > 0 ? books.length : 9);
-  const subjectsCount = Number(status.stats?.subjects) || (subjects.length > 0 ? subjects.length : 8);
-  const questionsCount = Number(status.stats?.questions) || (subjects.length > 0 ? subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) : 0) || 2929;
+  const booksCount = Number(status.stats?.books) || (books.length > 0 ? books.length : 10);
+  const subjectsCount = Number(status.stats?.subjects) || (subjects.length > 0 ? subjects.length : 9);
+  const questionsCount = Number(status.stats?.questions) || (subjects.length > 0 ? subjects.reduce((acc, s) => acc + (s.questionCount || 0), 0) : 0) || 3441;
   const totalBankQuestions = questionsCount;
   const overallStats = getOverallStudentStats(totalBankQuestions);
 

@@ -10,8 +10,8 @@ function getInitialCatalogCache() {
       const parsed = JSON.parse(raw);
       const subs = Array.isArray(parsed.subjects) ? parsed.subjects : [];
       const bks = Array.isArray(parsed.books) ? parsed.books : [];
-      // Cache is only warm if it has all 8 subjects, exactly 9 books, and none of the books have 0 or obsolete questionCounts
-      const isWarm = subs.length >= 8 && bks.length === 9 && !bks.some(b => !b.questionCount || b.questionCount === 0 || (b.title && b.title.includes('ARCHITECTURE') && b.questionCount < 800));
+      // Cache is only warm if it has at least 9 subjects/books and none have 0 or obsolete questionCounts
+      const isWarm = subs.length >= 9 && bks.length >= 10 && !bks.some(b => !b.questionCount || b.questionCount === 0 || (b.title && b.title.includes('ARCHITECTURE') && b.questionCount < 800));
       if (isWarm) {
         return {
           subjects: subs,
@@ -36,7 +36,7 @@ export const fetchCatalogData = createAsyncThunk(
 
     // Cache TTL: 60 seconds unless force is requested or cached books have outdated counts
     const now = Date.now();
-    const hasOutdatedBooks = catalog.books.length !== 9 || catalog.books.some(b => !b.questionCount || b.questionCount === 0 || (b.title && b.title.includes('ARCHITECTURE') && b.questionCount < 800));
+    const hasOutdatedBooks = catalog.books.length < 10 || catalog.books.some(b => !b.questionCount || b.questionCount === 0 || (b.title && b.title.includes('ARCHITECTURE') && b.questionCount < 800));
     if (!force && !hasOutdatedBooks && catalog.lastFetched && (now - catalog.lastFetched < 60000) && catalog.subjects.length >= 8) {
       return {
         subjects: catalog.subjects,
